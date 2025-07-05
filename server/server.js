@@ -1,6 +1,8 @@
+require('dotenv').config();
 const express = require('express');
 const morgan = require('morgan');
 const uploadRoutes = require('./routes/uploadRoutes');
+const groqRoutes = require('./routes/groqRoutes');
 
 const app = express();
 
@@ -11,9 +13,23 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to the modular Express.js server!' });
+  res.json({ 
+    message: 'Welcome to the modular Express.js server with Groq AI integration!',
+    endpoints: {
+      upload: 'POST /upload - Upload and extract ZIP files',
+      analysis: {
+        file: 'POST /analyze/file - Analyze single file',
+        batch: 'POST /analyze/batch - Analyze all extracted files',
+        results: 'GET /analyze/results/:id - Get analysis result',
+        allResults: 'GET /analyze/results - Get all results',
+        stats: 'GET /analyze/stats - Get analysis statistics',
+        types: 'GET /analyze/types - Get available analysis types'
+      }
+    }
+  });
 });
 app.use('/', uploadRoutes);
+app.use('/', groqRoutes);
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not Found' }));

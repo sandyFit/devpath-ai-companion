@@ -15,9 +15,12 @@
   "type": "commonjs",
   "dependencies": {
     "adm-zip": "^0.5.16",
+    "dotenv": "^16.4.5",
     "express": "^5.1.0",
+    "groq-sdk": "^0.7.0",
     "morgan": "^1.10.0",
-    "multer": "^2.0.1"
+    "multer": "^2.0.1",
+    "uuid": "^10.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
