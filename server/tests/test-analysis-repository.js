@@ -1,4 +1,4 @@
-const analysisRepository = require('./src/repositories/analysisRepository');
+const analysisRepository = require('../src/repositories/analysisRepository');
 
 async function testAnalysisRepository() {
   console.log('🔍 Starting Analysis Repository Testing...\n');

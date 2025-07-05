@@ -6,7 +6,9 @@ const {
   getAnalysisResult,
   getAllAnalysisResults,
   getAnalysisStats,
-  getAvailableAnalysisTypes
+  getAvailableAnalysisTypes,
+  getProjectAnalyses,
+  getProjectAnalyticsSummary
 } = require('../controllers/analysisController');
 const {
   validateAnalysisRequest,
@@ -21,5 +23,9 @@ router.get('/analyze/results/:analysisId', validateAnalysisId, getAnalysisResult
 router.get('/analyze/results', getAllAnalysisResults);
 router.get('/analyze/stats', getAnalysisStats);
 router.get('/analyze/types', getAvailableAnalysisTypes);
+
+// Project analysis endpoints
+router.get('/api/analysis/:projectId', getProjectAnalyses);
+router.get('/api/analysis/:projectId/summary', getProjectAnalyticsSummary);
 
 module.exports = router;

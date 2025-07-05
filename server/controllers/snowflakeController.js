@@ -1,6 +1,7 @@
 const snowflakeService = require('../services/snowflakeService');
 const { v4: uuidv4 } = require('uuid');
 
+
 const connect = async (req, res) => {
   try {
     console.log('[SnowflakeController] Received connection request');
@@ -10,7 +11,7 @@ const connect = async (req, res) => {
     
     console.log('[SnowflakeController] Connection established successfully');
     
-    res.json({
+    res.status(200).json({
       success: true,
       message: 'Successfully connected to Snowflake',
       data: {

@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const analysisService = require('../services/analysisService');
+const analysisRepository = require('../src/repositories/analysisRepository');
+const projectRepository = require('../src/repositories/projectRepository');
 const { v4: uuidv4 } = require('uuid');
 
 const ANALYSIS_TYPES = {
@@ -16,7 +18,7 @@ const analyzeFile = async (req, res) => {
     console.log('[AnalysisController] Received file analysis request');
     console.log('[AnalysisController] Request body:', req.body);
     
-    const { filename, content, language, analysisTypes } = req.body;
+    const { filename, content, language, analysisTypes, projectId } = req.body;
     
     // Validate required fields
     if (!filename || !content) {
@@ -38,14 +40,52 @@ const analyzeFile = async (req, res) => {
       analysisTypes: types
     };
     
-    const result = await analysisService.analyzeFile(fileData);
+    // Perform analysis using existing service
+    const analysisResult = await analysisService.analyzeFile(fileData);
+    
+    // Store analysis in Snowflake if we have the analysis data
+    let storedAnalysis = null;
+    if (analysisResult && analysisResult.analysis) {
+      try {
+        const analysisData = {
+          fileId: fileData.fileId,
+          issuesFound: analysisResult.analysis.issues || [],
+          suggestions: analysisResult.analysis.suggestions || [],
+          qualityScore: analysisResult.analysis.qualityScore || 5,
+          complexityScore: analysisResult.analysis.complexityScore || 5,
+          securityScore: analysisResult.analysis.securityScore || 5,
+          strengths: analysisResult.analysis.strengths || [],
+          learningRecommendations: analysisResult.analysis.learningRecommendations || []
+        };
+
+        storedAnalysis = await analysisRepository.createAnalysis(analysisData);
+        console.log(`[AnalysisController] Analysis stored in database: ${storedAnalysis.data.analysisId}`);
+        
+        // Update project status if projectId provided
+        if (projectId) {
+          try {
+            await projectRepository.updateProjectStatus(projectId, 'PROCESSING');
+          } catch (projectError) {
+            console.warn('[AnalysisController] Could not update project status:', projectError.message);
+          }
+        }
+        
+      } catch (dbError) {
+        console.warn('[AnalysisController] Could not store analysis in database:', dbError.message);
+      }
+    }
     
     console.log(`[AnalysisController] Analysis completed for file: ${filename}`);
     
     res.json({
       success: true,
       message: 'File analysis completed successfully',
-      data: result
+      data: {
+        ...analysisResult,
+        databaseAnalysisId: storedAnalysis?.data?.analysisId || null,
+        projectId: projectId || null,
+        storedInDatabase: !!storedAnalysis
+      }
     });
     
   } catch (error) {
@@ -61,7 +101,7 @@ const analyzeExtractedFiles = async (req, res) => {
   try {
     console.log('[AnalysisController] Received batch analysis request');
     
-    const { analysisTypes } = req.body;
+    const { analysisTypes, projectId } = req.body;
     const extractedDir = path.join(__dirname, '..', 'extracted');
     
     // Check if extracted directory exists
@@ -76,18 +116,93 @@ const analyzeExtractedFiles = async (req, res) => {
       ? analysisTypes 
       : Object.values(ANALYSIS_TYPES);
     
-    const result = await analysisService.analyzeBatch(extractedDir, types);
+    // Update project status to processing if projectId provided
+    if (projectId) {
+      try {
+        await projectRepository.updateProjectStatus(projectId, 'PROCESSING');
+        console.log(`[AnalysisController] Updated project ${projectId} status to PROCESSING`);
+      } catch (projectError) {
+        console.warn('[AnalysisController] Could not update project status:', projectError.message);
+      }
+    }
     
-    console.log(`[AnalysisController] Batch analysis completed. Processed ${result.totalFiles} files`);
+    // Perform batch analysis using existing service
+    const batchResult = await analysisService.analyzeBatch(extractedDir, types);
+    
+    // Store successful analyses in Snowflake
+    const storedAnalyses = [];
+    let successfulStores = 0;
+    
+    for (const result of batchResult.results) {
+      if (!result.error && result.analysis) {
+        try {
+          const analysisData = {
+            fileId: result.fileId || uuidv4(),
+            issuesFound: result.analysis.issues || [],
+            suggestions: result.analysis.suggestions || [],
+            qualityScore: result.analysis.qualityScore || 5,
+            complexityScore: result.analysis.complexityScore || 5,
+            securityScore: result.analysis.securityScore || 5,
+            strengths: result.analysis.strengths || [],
+            learningRecommendations: result.analysis.learningRecommendations || []
+          };
+
+          const storedAnalysis = await analysisRepository.createAnalysis(analysisData);
+          storedAnalyses.push({
+            filename: result.filename,
+            analysisId: storedAnalysis.data.analysisId,
+            originalAnalysisId: result.analysisId
+          });
+          successfulStores++;
+          
+        } catch (dbError) {
+          console.warn(`[AnalysisController] Could not store analysis for ${result.filename}:`, dbError.message);
+        }
+      }
+    }
+    
+    // Update project status to completed if projectId provided and all analyses succeeded
+    if (projectId && batchResult.failedAnalyses === 0) {
+      try {
+        await projectRepository.updateProjectStatus(projectId, 'COMPLETED');
+        console.log(`[AnalysisController] Updated project ${projectId} status to COMPLETED`);
+      } catch (projectError) {
+        console.warn('[AnalysisController] Could not update project status to completed:', projectError.message);
+      }
+    } else if (projectId && batchResult.failedAnalyses > 0) {
+      try {
+        await projectRepository.updateProjectStatus(projectId, 'FAILED');
+        console.log(`[AnalysisController] Updated project ${projectId} status to FAILED due to analysis failures`);
+      } catch (projectError) {
+        console.warn('[AnalysisController] Could not update project status to failed:', projectError.message);
+      }
+    }
+    
+    console.log(`[AnalysisController] Batch analysis completed. Processed ${batchResult.totalFiles} files, stored ${successfulStores} in database`);
     
     res.json({
       success: true,
       message: 'Batch analysis completed successfully',
-      data: result
+      data: {
+        ...batchResult,
+        projectId: projectId || null,
+        storedInDatabase: successfulStores,
+        databaseAnalyses: storedAnalyses
+      }
     });
     
   } catch (error) {
     console.error('[AnalysisController] Error in analyzeExtractedFiles:', error);
+    
+    // Update project status to failed if projectId provided
+    if (req.body.projectId) {
+      try {
+        await projectRepository.updateProjectStatus(req.body.projectId, 'FAILED');
+      } catch (projectError) {
+        console.warn('[AnalysisController] Could not update project status to failed:', projectError.message);
+      }
+    }
+    
     res.status(500).json({ 
       error: 'Batch analysis failed', 
       details: error.message 
@@ -107,7 +222,30 @@ const getAnalysisResult = async (req, res) => {
       });
     }
     
-    const result = analysisService.getAnalysisResult(analysisId);
+    // Try to get from Snowflake first
+    let result = null;
+    try {
+      const dbResult = await analysisRepository.getAnalysisById(analysisId);
+      if (dbResult) {
+        result = dbResult.data;
+        console.log(`[AnalysisController] Found analysis in database: ${analysisId}`);
+      }
+    } catch (dbError) {
+      console.warn('[AnalysisController] Could not retrieve from database:', dbError.message);
+    }
+    
+    // Fallback to in-memory storage
+    if (!result) {
+      try {
+        result = analysisService.getAnalysisResult(analysisId);
+        console.log(`[AnalysisController] Found analysis in memory: ${analysisId}`);
+      } catch (memoryError) {
+        return res.status(404).json({ 
+          error: 'Analysis result not found',
+          details: `No analysis found with ID: ${analysisId}`
+        });
+      }
+    }
     
     res.json({
       success: true,
@@ -116,14 +254,6 @@ const getAnalysisResult = async (req, res) => {
     
   } catch (error) {
     console.error('[AnalysisController] Error in getAnalysisResult:', error);
-    
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ 
-        error: 'Analysis result not found',
-        details: error.message 
-      });
-    }
-    
     res.status(500).json({ 
       error: 'Failed to retrieve analysis result', 
       details: error.message 
@@ -135,12 +265,28 @@ const getAllAnalysisResults = async (req, res) => {
   try {
     console.log('[AnalysisController] Retrieving all analysis results');
     
-    const results = analysisService.getAllAnalysisResults();
+    // Get from both sources
+    let dbResults = [];
+    let memoryResults = [];
+    
+    try {
+      // Note: This would need a method to get all analyses, which we don't have yet
+      // For now, we'll use the in-memory results
+      memoryResults = analysisService.getAllAnalysisResults();
+    } catch (memoryError) {
+      console.warn('[AnalysisController] Could not retrieve from memory:', memoryError.message);
+    }
+    
+    const allResults = [...dbResults, ...memoryResults];
     
     res.json({
       success: true,
-      count: results.length,
-      data: results
+      count: allResults.length,
+      data: allResults,
+      sources: {
+        database: dbResults.length,
+        memory: memoryResults.length
+      }
     });
     
   } catch (error) {
@@ -156,11 +302,15 @@ const getAnalysisStats = async (req, res) => {
   try {
     console.log('[AnalysisController] Retrieving analysis statistics');
     
-    const stats = analysisService.getAnalysisStats();
+    // Get stats from memory (existing implementation)
+    const memoryStats = analysisService.getAnalysisStats();
+    
+    // TODO: Add database stats when we have more repository methods
+    // For now, return the memory stats
     
     res.json({
       success: true,
-      data: stats
+      data: memoryStats
     });
     
   } catch (error) {
@@ -199,11 +349,79 @@ const getAvailableAnalysisTypes = (req, res) => {
   }
 };
 
+// New endpoint to get project analyses
+const getProjectAnalyses = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { limit, offset, minQualityScore, maxComplexityScore } = req.query;
+    
+    console.log(`[AnalysisController] Retrieving analyses for project: ${projectId}`);
+    
+    if (!projectId) {
+      return res.status(400).json({ 
+        error: 'Project ID is required' 
+      });
+    }
+    
+    const options = {};
+    if (limit) options.limit = parseInt(limit);
+    if (offset) options.offset = parseInt(offset);
+    if (minQualityScore) options.minQualityScore = parseFloat(minQualityScore);
+    if (maxComplexityScore) options.maxComplexityScore = parseFloat(maxComplexityScore);
+    
+    const result = await analysisRepository.getAnalysesByProjectId(projectId, options);
+    
+    res.json({
+      success: true,
+      data: result.data,
+      metadata: result.metadata
+    });
+    
+  } catch (error) {
+    console.error('[AnalysisController] Error in getProjectAnalyses:', error);
+    res.status(500).json({ 
+      error: 'Failed to retrieve project analyses', 
+      details: error.message 
+    });
+  }
+};
+
+// New endpoint to get project analytics summary
+const getProjectAnalyticsSummary = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    console.log(`[AnalysisController] Retrieving analytics summary for project: ${projectId}`);
+    
+    if (!projectId) {
+      return res.status(400).json({ 
+        error: 'Project ID is required' 
+      });
+    }
+    
+    const result = await analysisRepository.getProjectAnalyticsSummary(projectId);
+    
+    res.json({
+      success: true,
+      data: result.data
+    });
+    
+  } catch (error) {
+    console.error('[AnalysisController] Error in getProjectAnalyticsSummary:', error);
+    res.status(500).json({ 
+      error: 'Failed to retrieve project analytics', 
+      details: error.message 
+    });
+  }
+};
+
 module.exports = {
   analyzeFile,
   analyzeExtractedFiles,
   getAnalysisResult,
   getAllAnalysisResults,
   getAnalysisStats,
-  getAvailableAnalysisTypes
+  getAvailableAnalysisTypes,
+  getProjectAnalyses,
+  getProjectAnalyticsSummary
 };

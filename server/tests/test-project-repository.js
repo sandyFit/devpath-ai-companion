@@ -1,4 +1,4 @@
-const projectRepository = require('./src/repositories/projectRepository');
+const projectRepository = require('../src/repositories/projectRepository');
 
 async function testProjectRepository() {
   console.log('🗂️ Starting Project Repository Testing...\n');
