@@ -3,6 +3,8 @@ const express = require('express');
 const morgan = require('morgan');
 const uploadRoutes = require('./routes/uploadRoutes');
 const groqRoutes = require('./routes/groqRoutes');
+const snowflakeRoutes = require('./routes/snowflakeRoutes');
+const databaseRoutes = require('./routes/databaseRoutes');
 
 const app = express();
 
@@ -24,12 +26,35 @@ app.get('/', (req, res) => {
         allResults: 'GET /analyze/results - Get all results',
         stats: 'GET /analyze/stats - Get analysis statistics',
         types: 'GET /analyze/types - Get available analysis types'
+      },
+      snowflake: {
+        connect: 'POST /snowflake/connect - Connect to Snowflake',
+        disconnect: 'POST /snowflake/disconnect - Disconnect from Snowflake',
+        status: 'GET /snowflake/status - Get connection status',
+        health: 'GET /snowflake/health - Health check',
+        query: 'POST /snowflake/query - Execute single query',
+        batch: 'POST /snowflake/batch - Execute batch queries',
+        templates: 'GET /snowflake/templates - Get query templates'
+      },
+      database: {
+        init: 'POST /database/init - Initialize database schema',
+        schema: 'GET /database/schema - Get schema information',
+        projects: 'POST /database/projects - Create new project',
+        projectSummary: 'GET /database/projects/:id/summary - Get project summary',
+        projectStatus: 'PUT /database/projects/:id/status - Update project status',
+        files: 'POST /database/files - Insert code file',
+        analysis: 'POST /database/analysis - Insert analysis results',
+        learningPaths: 'POST /database/learning-paths - Create learning path',
+        userProgress: 'GET /database/users/:id/learning-progress - Get user progress',
+        insights: 'GET /database/insights/code-quality - Get code quality insights'
       }
     }
   });
 });
 app.use('/', uploadRoutes);
 app.use('/', groqRoutes);
+app.use('/', snowflakeRoutes);
+app.use('/', databaseRoutes);
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not Found' }));

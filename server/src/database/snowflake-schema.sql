@@ -1,0 +1,412 @@
+-- =====================================================
+-- DevPath AI - Snowflake Database Schema
+-- =====================================================
+-- This script creates the complete database schema for the DevPath AI project
+-- including tables, indexes, constraints, and initial setup
+
+-- Create database and schema (if not exists)
+CREATE DATABASE IF NOT EXISTS DEVPATH_AI;
+USE DATABASE DEVPATH_AI;
+
+CREATE SCHEMA IF NOT EXISTS MAIN;
+USE SCHEMA MAIN;
+
+-- =====================================================
+-- 1. PROJECTS TABLE
+-- =====================================================
+-- Stores information about uploaded code projects
+CREATE OR REPLACE TABLE PROJECTS (
+    PROJECT_ID VARCHAR(36) NOT NULL,
+    USER_ID VARCHAR(255) NOT NULL,
+    UPLOAD_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    PROJECT_NAME VARCHAR(500) NOT NULL,
+    TOTAL_FILES INTEGER DEFAULT 0,
+    STATUS VARCHAR(50) DEFAULT 'PENDING',
+    
+    -- Metadata columns
+    CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    UPDATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    
+    -- Primary key constraint
+    CONSTRAINT PK_PROJECTS PRIMARY KEY (PROJECT_ID),
+    
+    -- Check constraints
+    CONSTRAINT CHK_PROJECTS_STATUS CHECK (STATUS IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'ARCHIVED')),
+    CONSTRAINT CHK_PROJECTS_TOTAL_FILES CHECK (TOTAL_FILES >= 0),
+    CONSTRAINT CHK_PROJECTS_PROJECT_NAME CHECK (LENGTH(TRIM(PROJECT_NAME)) > 0)
+);
+
+-- Add comments to PROJECTS table
+COMMENT ON TABLE PROJECTS IS 'Stores information about uploaded code projects and their processing status';
+COMMENT ON COLUMN PROJECTS.PROJECT_ID IS 'Unique identifier for the project (UUID format)';
+COMMENT ON COLUMN PROJECTS.USER_ID IS 'Identifier for the user who uploaded the project';
+COMMENT ON COLUMN PROJECTS.UPLOAD_TIMESTAMP IS 'When the project was uploaded';
+COMMENT ON COLUMN PROJECTS.PROJECT_NAME IS 'Human-readable name for the project';
+COMMENT ON COLUMN PROJECTS.TOTAL_FILES IS 'Total number of code files in the project';
+COMMENT ON COLUMN PROJECTS.STATUS IS 'Current processing status of the project';
+
+-- =====================================================
+-- 2. CODE_FILES TABLE
+-- =====================================================
+-- Stores individual code files within projects
+CREATE OR REPLACE TABLE CODE_FILES (
+    FILE_ID VARCHAR(36) NOT NULL,
+    PROJECT_ID VARCHAR(36) NOT NULL,
+    FILENAME VARCHAR(1000) NOT NULL,
+    LANGUAGE VARCHAR(50) NOT NULL,
+    CONTENT TEXT,
+    FILE_SIZE INTEGER DEFAULT 0,
+    CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    
+    -- Metadata columns
+    FILE_PATH VARCHAR(2000),
+    FILE_EXTENSION VARCHAR(10),
+    ENCODING VARCHAR(20) DEFAULT 'UTF-8',
+    
+    -- Primary key constraint
+    CONSTRAINT PK_CODE_FILES PRIMARY KEY (FILE_ID),
+    
+    -- Foreign key constraint
+    CONSTRAINT FK_CODE_FILES_PROJECT FOREIGN KEY (PROJECT_ID) REFERENCES PROJECTS(PROJECT_ID),
+    
+    -- Check constraints
+    CONSTRAINT CHK_CODE_FILES_LANGUAGE CHECK (LANGUAGE IN ('javascript', 'typescript', 'python', 'java', 'csharp', 'cpp', 'go', 'rust', 'php', 'ruby', 'other')),
+    CONSTRAINT CHK_CODE_FILES_FILE_SIZE CHECK (FILE_SIZE >= 0),
+    CONSTRAINT CHK_CODE_FILES_FILENAME CHECK (LENGTH(TRIM(FILENAME)) > 0)
+);
+
+-- Add comments to CODE_FILES table
+COMMENT ON TABLE CODE_FILES IS 'Stores individual code files within projects with their content and metadata';
+COMMENT ON COLUMN CODE_FILES.FILE_ID IS 'Unique identifier for the code file (UUID format)';
+COMMENT ON COLUMN CODE_FILES.PROJECT_ID IS 'Reference to the parent project';
+COMMENT ON COLUMN CODE_FILES.FILENAME IS 'Original filename of the code file';
+COMMENT ON COLUMN CODE_FILES.LANGUAGE IS 'Programming language of the file';
+COMMENT ON COLUMN CODE_FILES.CONTENT IS 'Full text content of the code file';
+COMMENT ON COLUMN CODE_FILES.FILE_SIZE IS 'Size of the file in bytes';
+
+-- =====================================================
+-- 3. ANALYSIS TABLE
+-- =====================================================
+-- Stores AI analysis results for code files
+CREATE OR REPLACE TABLE ANALYSIS (
+    ANALYSIS_ID VARCHAR(36) NOT NULL,
+    FILE_ID VARCHAR(36) NOT NULL,
+    ISSUES_FOUND VARIANT,
+    SUGGESTIONS VARIANT,
+    QUALITY_SCORE INTEGER,
+    COMPLEXITY_SCORE INTEGER,
+    SECURITY_SCORE INTEGER,
+    CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    
+    -- Additional analysis metadata
+    ANALYSIS_TYPE VARCHAR(100) DEFAULT 'COMPREHENSIVE',
+    MODEL_VERSION VARCHAR(50),
+    PROCESSING_TIME_MS INTEGER,
+    STRENGTHS VARIANT,
+    LEARNING_RECOMMENDATIONS VARIANT,
+    
+    -- Primary key constraint
+    CONSTRAINT PK_ANALYSIS PRIMARY KEY (ANALYSIS_ID),
+    
+    -- Foreign key constraint
+    CONSTRAINT FK_ANALYSIS_FILE FOREIGN KEY (FILE_ID) REFERENCES CODE_FILES(FILE_ID),
+    
+    -- Check constraints
+    CONSTRAINT CHK_ANALYSIS_QUALITY_SCORE CHECK (QUALITY_SCORE BETWEEN 1 AND 10),
+    CONSTRAINT CHK_ANALYSIS_COMPLEXITY_SCORE CHECK (COMPLEXITY_SCORE BETWEEN 1 AND 10),
+    CONSTRAINT CHK_ANALYSIS_SECURITY_SCORE CHECK (SECURITY_SCORE BETWEEN 1 AND 10),
+    CONSTRAINT CHK_ANALYSIS_PROCESSING_TIME CHECK (PROCESSING_TIME_MS >= 0)
+);
+
+-- Add comments to ANALYSIS table
+COMMENT ON TABLE ANALYSIS IS 'Stores AI-powered analysis results for code files including scores and recommendations';
+COMMENT ON COLUMN ANALYSIS.ANALYSIS_ID IS 'Unique identifier for the analysis result (UUID format)';
+COMMENT ON COLUMN ANALYSIS.FILE_ID IS 'Reference to the analyzed code file';
+COMMENT ON COLUMN ANALYSIS.ISSUES_FOUND IS 'JSON array of identified code issues and problems';
+COMMENT ON COLUMN ANALYSIS.SUGGESTIONS IS 'JSON array of improvement suggestions';
+COMMENT ON COLUMN ANALYSIS.QUALITY_SCORE IS 'Code quality score from 1-10';
+COMMENT ON COLUMN ANALYSIS.COMPLEXITY_SCORE IS 'Code complexity score from 1-10';
+COMMENT ON COLUMN ANALYSIS.SECURITY_SCORE IS 'Security assessment score from 1-10';
+
+-- =====================================================
+-- 4. LEARNING_PATHS TABLE
+-- =====================================================
+-- Stores personalized learning recommendations for users
+CREATE OR REPLACE TABLE LEARNING_PATHS (
+    PATH_ID VARCHAR(36) NOT NULL,
+    USER_ID VARCHAR(255) NOT NULL,
+    PROJECT_ID VARCHAR(36) NOT NULL,
+    RECOMMENDED_TOPICS VARIANT,
+    DIFFICULTY_LEVEL VARCHAR(20) DEFAULT 'INTERMEDIATE',
+    ESTIMATED_HOURS INTEGER DEFAULT 0,
+    CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    
+    -- Additional learning path metadata
+    COMPLETION_STATUS VARCHAR(20) DEFAULT 'NOT_STARTED',
+    PRIORITY_SCORE INTEGER DEFAULT 5,
+    PREREQUISITES VARIANT,
+    LEARNING_OBJECTIVES VARIANT,
+    RESOURCES VARIANT,
+    
+    -- Primary key constraint
+    CONSTRAINT PK_LEARNING_PATHS PRIMARY KEY (PATH_ID),
+    
+    -- Foreign key constraints
+    CONSTRAINT FK_LEARNING_PATHS_PROJECT FOREIGN KEY (PROJECT_ID) REFERENCES PROJECTS(PROJECT_ID),
+    
+    -- Check constraints
+    CONSTRAINT CHK_LEARNING_PATHS_DIFFICULTY CHECK (DIFFICULTY_LEVEL IN ('BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT')),
+    CONSTRAINT CHK_LEARNING_PATHS_ESTIMATED_HOURS CHECK (ESTIMATED_HOURS >= 0),
+    CONSTRAINT CHK_LEARNING_PATHS_COMPLETION_STATUS CHECK (COMPLETION_STATUS IN ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'PAUSED', 'ABANDONED')),
+    CONSTRAINT CHK_LEARNING_PATHS_PRIORITY_SCORE CHECK (PRIORITY_SCORE BETWEEN 1 AND 10)
+);
+
+-- Add comments to LEARNING_PATHS table
+COMMENT ON TABLE LEARNING_PATHS IS 'Stores personalized learning recommendations and paths for users based on code analysis';
+COMMENT ON COLUMN LEARNING_PATHS.PATH_ID IS 'Unique identifier for the learning path (UUID format)';
+COMMENT ON COLUMN LEARNING_PATHS.USER_ID IS 'Identifier for the user this path is designed for';
+COMMENT ON COLUMN LEARNING_PATHS.PROJECT_ID IS 'Reference to the project that generated this learning path';
+COMMENT ON COLUMN LEARNING_PATHS.RECOMMENDED_TOPICS IS 'JSON array of recommended learning topics and skills';
+COMMENT ON COLUMN LEARNING_PATHS.DIFFICULTY_LEVEL IS 'Overall difficulty level of the learning path';
+COMMENT ON COLUMN LEARNING_PATHS.ESTIMATED_HOURS IS 'Estimated time to complete the learning path';
+
+-- =====================================================
+-- INDEXES FOR PERFORMANCE OPTIMIZATION
+-- =====================================================
+
+-- PROJECTS table indexes
+CREATE INDEX IF NOT EXISTS IDX_PROJECTS_USER_ID ON PROJECTS(USER_ID);
+CREATE INDEX IF NOT EXISTS IDX_PROJECTS_STATUS ON PROJECTS(STATUS);
+CREATE INDEX IF NOT EXISTS IDX_PROJECTS_UPLOAD_TIMESTAMP ON PROJECTS(UPLOAD_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS IDX_PROJECTS_USER_STATUS ON PROJECTS(USER_ID, STATUS);
+
+-- CODE_FILES table indexes
+CREATE INDEX IF NOT EXISTS IDX_CODE_FILES_PROJECT_ID ON CODE_FILES(PROJECT_ID);
+CREATE INDEX IF NOT EXISTS IDX_CODE_FILES_LANGUAGE ON CODE_FILES(LANGUAGE);
+CREATE INDEX IF NOT EXISTS IDX_CODE_FILES_CREATED_AT ON CODE_FILES(CREATED_AT);
+CREATE INDEX IF NOT EXISTS IDX_CODE_FILES_PROJECT_LANGUAGE ON CODE_FILES(PROJECT_ID, LANGUAGE);
+CREATE INDEX IF NOT EXISTS IDX_CODE_FILES_FILENAME ON CODE_FILES(FILENAME);
+
+-- ANALYSIS table indexes
+CREATE INDEX IF NOT EXISTS IDX_ANALYSIS_FILE_ID ON ANALYSIS(FILE_ID);
+CREATE INDEX IF NOT EXISTS IDX_ANALYSIS_CREATED_AT ON ANALYSIS(CREATED_AT);
+CREATE INDEX IF NOT EXISTS IDX_ANALYSIS_QUALITY_SCORE ON ANALYSIS(QUALITY_SCORE);
+CREATE INDEX IF NOT EXISTS IDX_ANALYSIS_COMPLEXITY_SCORE ON ANALYSIS(COMPLEXITY_SCORE);
+CREATE INDEX IF NOT EXISTS IDX_ANALYSIS_SECURITY_SCORE ON ANALYSIS(SECURITY_SCORE);
+CREATE INDEX IF NOT EXISTS IDX_ANALYSIS_SCORES ON ANALYSIS(QUALITY_SCORE, COMPLEXITY_SCORE, SECURITY_SCORE);
+
+-- LEARNING_PATHS table indexes
+CREATE INDEX IF NOT EXISTS IDX_LEARNING_PATHS_USER_ID ON LEARNING_PATHS(USER_ID);
+CREATE INDEX IF NOT EXISTS IDX_LEARNING_PATHS_PROJECT_ID ON LEARNING_PATHS(PROJECT_ID);
+CREATE INDEX IF NOT EXISTS IDX_LEARNING_PATHS_DIFFICULTY ON LEARNING_PATHS(DIFFICULTY_LEVEL);
+CREATE INDEX IF NOT EXISTS IDX_LEARNING_PATHS_COMPLETION_STATUS ON LEARNING_PATHS(COMPLETION_STATUS);
+CREATE INDEX IF NOT EXISTS IDX_LEARNING_PATHS_USER_STATUS ON LEARNING_PATHS(USER_ID, COMPLETION_STATUS);
+CREATE INDEX IF NOT EXISTS IDX_LEARNING_PATHS_PRIORITY ON LEARNING_PATHS(PRIORITY_SCORE);
+
+-- =====================================================
+-- VIEWS FOR COMMON QUERIES
+-- =====================================================
+
+-- Project summary view with file counts and analysis status
+CREATE OR REPLACE VIEW VW_PROJECT_SUMMARY AS
+SELECT 
+    p.PROJECT_ID,
+    p.USER_ID,
+    p.PROJECT_NAME,
+    p.STATUS,
+    p.UPLOAD_TIMESTAMP,
+    p.TOTAL_FILES,
+    COUNT(DISTINCT cf.FILE_ID) as ACTUAL_FILE_COUNT,
+    COUNT(DISTINCT a.ANALYSIS_ID) as ANALYZED_FILE_COUNT,
+    AVG(a.QUALITY_SCORE) as AVG_QUALITY_SCORE,
+    AVG(a.COMPLEXITY_SCORE) as AVG_COMPLEXITY_SCORE,
+    AVG(a.SECURITY_SCORE) as AVG_SECURITY_SCORE,
+    COUNT(DISTINCT lp.PATH_ID) as LEARNING_PATHS_COUNT
+FROM PROJECTS p
+LEFT JOIN CODE_FILES cf ON p.PROJECT_ID = cf.PROJECT_ID
+LEFT JOIN ANALYSIS a ON cf.FILE_ID = a.FILE_ID
+LEFT JOIN LEARNING_PATHS lp ON p.PROJECT_ID = lp.PROJECT_ID
+GROUP BY p.PROJECT_ID, p.USER_ID, p.PROJECT_NAME, p.STATUS, p.UPLOAD_TIMESTAMP, p.TOTAL_FILES;
+
+-- User learning progress view
+CREATE OR REPLACE VIEW VW_USER_LEARNING_PROGRESS AS
+SELECT 
+    lp.USER_ID,
+    COUNT(DISTINCT lp.PATH_ID) as TOTAL_LEARNING_PATHS,
+    COUNT(DISTINCT CASE WHEN lp.COMPLETION_STATUS = 'COMPLETED' THEN lp.PATH_ID END) as COMPLETED_PATHS,
+    COUNT(DISTINCT CASE WHEN lp.COMPLETION_STATUS = 'IN_PROGRESS' THEN lp.PATH_ID END) as IN_PROGRESS_PATHS,
+    SUM(lp.ESTIMATED_HOURS) as TOTAL_ESTIMATED_HOURS,
+    AVG(lp.PRIORITY_SCORE) as AVG_PRIORITY_SCORE,
+    COUNT(DISTINCT lp.PROJECT_ID) as PROJECTS_WITH_LEARNING_PATHS
+FROM LEARNING_PATHS lp
+GROUP BY lp.USER_ID;
+
+-- Code quality insights view
+CREATE OR REPLACE VIEW VW_CODE_QUALITY_INSIGHTS AS
+SELECT 
+    cf.LANGUAGE,
+    COUNT(DISTINCT cf.FILE_ID) as TOTAL_FILES,
+    COUNT(DISTINCT a.ANALYSIS_ID) as ANALYZED_FILES,
+    AVG(a.QUALITY_SCORE) as AVG_QUALITY_SCORE,
+    AVG(a.COMPLEXITY_SCORE) as AVG_COMPLEXITY_SCORE,
+    AVG(a.SECURITY_SCORE) as AVG_SECURITY_SCORE,
+    AVG(cf.FILE_SIZE) as AVG_FILE_SIZE,
+    COUNT(DISTINCT cf.PROJECT_ID) as PROJECTS_COUNT
+FROM CODE_FILES cf
+LEFT JOIN ANALYSIS a ON cf.FILE_ID = a.FILE_ID
+GROUP BY cf.LANGUAGE
+ORDER BY TOTAL_FILES DESC;
+
+-- =====================================================
+-- STORED PROCEDURES FOR COMMON OPERATIONS
+-- =====================================================
+
+-- Procedure to create a new project with validation
+CREATE OR REPLACE PROCEDURE SP_CREATE_PROJECT(
+    PROJECT_ID VARCHAR,
+    USER_ID VARCHAR,
+    PROJECT_NAME VARCHAR
+)
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    -- Validate input parameters
+    IF PROJECT_ID IS NULL OR TRIM(PROJECT_ID) = '' THEN
+        RETURN 'ERROR: PROJECT_ID cannot be empty';
+    END IF;
+    
+    IF USER_ID IS NULL OR TRIM(USER_ID) = '' THEN
+        RETURN 'ERROR: USER_ID cannot be empty';
+    END IF;
+    
+    IF PROJECT_NAME IS NULL OR TRIM(PROJECT_NAME) = '' THEN
+        RETURN 'ERROR: PROJECT_NAME cannot be empty';
+    END IF;
+    
+    -- Insert the project
+    INSERT INTO PROJECTS (PROJECT_ID, USER_ID, PROJECT_NAME, STATUS)
+    VALUES (PROJECT_ID, USER_ID, PROJECT_NAME, 'PENDING');
+    
+    RETURN 'SUCCESS: Project created successfully';
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN 'ERROR: ' || SQLERRM;
+END;
+$$;
+
+-- Procedure to update project status
+CREATE OR REPLACE PROCEDURE SP_UPDATE_PROJECT_STATUS(
+    PROJECT_ID VARCHAR,
+    NEW_STATUS VARCHAR
+)
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    -- Validate status
+    IF NEW_STATUS NOT IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'ARCHIVED') THEN
+        RETURN 'ERROR: Invalid status value';
+    END IF;
+    
+    -- Update the project
+    UPDATE PROJECTS 
+    SET STATUS = NEW_STATUS, UPDATED_AT = CURRENT_TIMESTAMP()
+    WHERE PROJECT_ID = PROJECT_ID;
+    
+    IF SQLROWCOUNT = 0 THEN
+        RETURN 'ERROR: Project not found';
+    END IF;
+    
+    RETURN 'SUCCESS: Project status updated';
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN 'ERROR: ' || SQLERRM;
+END;
+$$;
+
+-- =====================================================
+-- SAMPLE DATA FOR TESTING (OPTIONAL)
+-- =====================================================
+
+-- Uncomment the following section to insert sample data for testing
+
+/*
+-- Sample project
+INSERT INTO PROJECTS (PROJECT_ID, USER_ID, PROJECT_NAME, STATUS, TOTAL_FILES)
+VALUES ('550e8400-e29b-41d4-a716-446655440000', 'user123', 'Sample Web App', 'COMPLETED', 3);
+
+-- Sample code files
+INSERT INTO CODE_FILES (FILE_ID, PROJECT_ID, FILENAME, LANGUAGE, CONTENT, FILE_SIZE)
+VALUES 
+    ('550e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440000', 'app.js', 'javascript', 'const express = require("express");', 1024),
+    ('550e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440000', 'utils.py', 'python', 'def hello_world():\n    print("Hello, World!")', 512),
+    ('550e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440000', 'styles.css', 'other', 'body { margin: 0; }', 256);
+
+-- Sample analysis results
+INSERT INTO ANALYSIS (ANALYSIS_ID, FILE_ID, ISSUES_FOUND, SUGGESTIONS, QUALITY_SCORE, COMPLEXITY_SCORE, SECURITY_SCORE)
+VALUES 
+    ('550e8400-e29b-41d4-a716-446655440004', '550e8400-e29b-41d4-a716-446655440001', 
+     PARSE_JSON('[{"type": "code_quality", "severity": "medium", "description": "Consider using const instead of var"}]'),
+     PARSE_JSON('[{"suggestion": "Use modern ES6 syntax", "priority": "medium"}]'),
+     8, 6, 9),
+    ('550e8400-e29b-41d4-a716-446655440005', '550e8400-e29b-41d4-a716-446655440002',
+     PARSE_JSON('[{"type": "best_practices", "severity": "low", "description": "Add docstring to function"}]'),
+     PARSE_JSON('[{"suggestion": "Add function documentation", "priority": "low"}]'),
+     9, 4, 10);
+
+-- Sample learning path
+INSERT INTO LEARNING_PATHS (PATH_ID, USER_ID, PROJECT_ID, RECOMMENDED_TOPICS, DIFFICULTY_LEVEL, ESTIMATED_HOURS)
+VALUES ('550e8400-e29b-41d4-a716-446655440006', 'user123', '550e8400-e29b-41d4-a716-446655440000',
+        PARSE_JSON('[{"topic": "ES6 Features", "priority": "high"}, {"topic": "Python Documentation", "priority": "medium"}]'),
+        'INTERMEDIATE', 15);
+*/
+
+-- =====================================================
+-- GRANTS AND PERMISSIONS
+-- =====================================================
+
+-- Grant usage on database and schema
+GRANT USAGE ON DATABASE DEVPATH_AI TO ROLE PUBLIC;
+GRANT USAGE ON SCHEMA DEVPATH_AI.MAIN TO ROLE PUBLIC;
+
+-- Grant table permissions (adjust roles as needed)
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA DEVPATH_AI.MAIN TO ROLE PUBLIC;
+GRANT SELECT ON ALL VIEWS IN SCHEMA DEVPATH_AI.MAIN TO ROLE PUBLIC;
+GRANT USAGE ON ALL PROCEDURES IN SCHEMA DEVPATH_AI.MAIN TO ROLE PUBLIC;
+
+-- =====================================================
+-- SCHEMA VALIDATION AND INFORMATION
+-- =====================================================
+
+-- Show created tables
+SHOW TABLES IN SCHEMA DEVPATH_AI.MAIN;
+
+-- Show created views
+SHOW VIEWS IN SCHEMA DEVPATH_AI.MAIN;
+
+-- Show created procedures
+SHOW PROCEDURES IN SCHEMA DEVPATH_AI.MAIN;
+
+-- Display table information
+SELECT 
+    TABLE_NAME,
+    TABLE_TYPE,
+    ROW_COUNT,
+    BYTES,
+    COMMENT
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE TABLE_SCHEMA = 'MAIN' 
+ORDER BY TABLE_NAME;
+
+-- =====================================================
+-- END OF SCHEMA SETUP
+-- =====================================================
+
+-- Schema creation completed successfully
+-- Total tables created: 4 (PROJECTS, CODE_FILES, ANALYSIS, LEARNING_PATHS)
+-- Total indexes created: 16
+-- Total views created: 3
+-- Total procedures created: 2
