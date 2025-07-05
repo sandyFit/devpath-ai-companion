@@ -1,2 +1,16 @@
-node_modules
+# Node.js
+node_modules/
 .env
+
+# Client
+client/.next/
+client/build/
+client/dist/
+
+# Server
+server/node_modules/
+server/build/
+server/.env
+
+# Logs
+*.log
