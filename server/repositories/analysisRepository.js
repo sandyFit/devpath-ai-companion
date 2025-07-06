@@ -1,5 +1,9 @@
 const snowflakeService = require('../services/snowflakeService');
+const { ANALYSIS_TYPES } = require('../services/analysisService');
+console.log('ANALYSIS_TYPES:', ANALYSIS_TYPES);
 const { v4: uuidv4 } = require('uuid');
+
+console.log('>>> USING ANALYSIS REPO FILE: analysisRepository.js');
 
 /**
  * Analysis Repository for Snowflake data access
@@ -7,7 +11,7 @@ const { v4: uuidv4 } = require('uuid');
  */
 class AnalysisRepository {
   constructor() {
-    this.tableName = 'ANALYSIS';
+    this.tableName = 'ANALYSES';
     this.logger = console; // Can be replaced with a proper logger
   }
 
@@ -26,6 +30,8 @@ class AnalysisRepository {
    */
   async createAnalysis(analysisData) {
     try {
+      console.log('[REPO DEBUG] Creating analysis with data:', analysisData);
+      
       const { 
         fileId, 
         issuesFound = [], 
@@ -33,126 +39,99 @@ class AnalysisRepository {
         qualityScore, 
         complexityScore, 
         securityScore,
-        strengths = [],
-        learningRecommendations = []
+        strengths = [], 
+        learningRecommendations = [],
+        projectId,
+        analysisType
       } = analysisData;
-      
+  
       // Validate required fields
-      if (!fileId) {
-        throw new Error('File ID is required');
+      if (!fileId) throw new Error('File ID is required');
+      if (!projectId) throw new Error('Project ID is required');
+      if (!analysisType) throw new Error('Analysis type is required');
+  
+      // ✅ FIXED VALIDATION
+      const normalizedAnalysisType = (analysisType || '').toLowerCase();
+      const normalizedAnalysisTypes = Object.values(ANALYSIS_TYPES).map(v => v.toLowerCase());
+  
+      console.log('>>> Raw analysisType:', analysisType);
+      console.log('>>> Normalized:', normalizedAnalysisType);
+      console.log('>>> Valid Types:', normalizedAnalysisTypes);
+  
+      if (!normalizedAnalysisTypes.includes(normalizedAnalysisType)) {
+        throw new Error(`Invalid analysis type: ${analysisType}. Valid types are: ${normalizedAnalysisTypes.join(', ')}`);
       }
-
-      if (qualityScore === undefined || complexityScore === undefined || securityScore === undefined) {
-        throw new Error('Quality, complexity, and security scores are required');
-      }
-
-      // Validate score ranges
-      const scores = { qualityScore, complexityScore, securityScore };
-      for (const [scoreName, score] of Object.entries(scores)) {
+  
+      // Validate scores
+      const validateScore = (score, name) => {
         if (typeof score !== 'number' || score < 1 || score > 10) {
-          throw new Error(`${scoreName} must be a number between 1 and 10`);
+          throw new Error(`${name} must be a number between 1 and 10`);
         }
-      }
-
+      };
+      
+      validateScore(qualityScore, 'qualityScore');
+      validateScore(complexityScore, 'complexityScore');
+      validateScore(securityScore, 'securityScore');
+  
       const analysisId = uuidv4();
-      
-      this.logger.log(`[AnalysisRepository] Creating analysis: ${analysisId} for file: ${fileId}`);
-      
-      const result = await snowflakeService.executeQuery(
-        `INSERT INTO ${this.tableName} (
-          ANALYSIS_ID, FILE_ID, ISSUES_FOUND, SUGGESTIONS, 
-          QUALITY_SCORE, COMPLEXITY_SCORE, SECURITY_SCORE,
-          STRENGTHS, LEARNING_RECOMMENDATIONS
-        ) VALUES (?, ?, PARSE_JSON(?), PARSE_JSON(?), ?, ?, ?, PARSE_JSON(?), PARSE_JSON(?))`,
-        [
-          analysisId, 
-          fileId, 
-          JSON.stringify(issuesFound), 
-          JSON.stringify(suggestions),
-          qualityScore, 
-          complexityScore, 
-          securityScore,
-          JSON.stringify(strengths),
-          JSON.stringify(learningRecommendations)
-        ],
-        { timeout: 30000 }
-      );
-      
-      this.logger.log(`[AnalysisRepository] Analysis created successfully: ${analysisId}`);
-      
+      console.log(`[REPO DEBUG] Generated analysis ID: ${analysisId}`);
+  
+      const insertQuery = `
+        INSERT INTO ${this.tableName} (
+          ANALYSIS_ID, FILE_ID, PROJECT_ID, ANALYSIS_TYPE,
+          ISSUES_FOUND, SUGGESTIONS, QUALITY_SCORE, COMPLEXITY_SCORE, 
+          SECURITY_SCORE, STRENGTHS, LEARNING_RECOMMENDATIONS,
+          CREATED_AT
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP())
+      `;
+
+  
+      const insertParams = [
+        analysisId,
+        fileId,
+        projectId,
+        normalizedAnalysisType,
+        JSON.stringify(issuesFound),
+        JSON.stringify(suggestions),
+        qualityScore,
+        complexityScore,
+        securityScore,
+        JSON.stringify(strengths),
+        JSON.stringify(learningRecommendations)
+      ];
+  
+      console.log('[REPO DEBUG] Executing query with params:', insertParams);
+      const result = await snowflakeService.executeQuery(insertQuery, insertParams, { timeout: 30000 });
+      console.log('[REPO DEBUG] Query result:', result);
+  
+      if (!result || result.rowCount === 0) {
+        throw new Error('Insert failed: No rows were affected');
+      }
+  
       return {
         success: true,
         data: {
           analysisId,
           fileId,
-          issuesFound,
-          suggestions,
+          projectId,
+          analysisType: normalizedAnalysisType,
           qualityScore,
           complexityScore,
           securityScore,
+          issuesFound,
+          suggestions,
           strengths,
           learningRecommendations,
           createdAt: new Date().toISOString()
-        },
-        queryResult: result
+        }
       };
-      
+  
     } catch (error) {
-      this.logger.error('[AnalysisRepository] Error creating analysis:', error);
+      console.error('[REPO ERROR] Error creating analysis:', error);
       throw new Error(`Failed to create analysis: ${error.message}`);
     }
   }
-
-  /**
-   * Get analysis results by file ID
-   * @param {string} fileId - File ID to get analysis for
-   * @returns {Promise<Object|null>} Analysis data or null if not found
-   */
-  async getAnalysisByFileId(fileId) {
-    try {
-      if (!fileId) {
-        throw new Error('File ID is required');
-      }
-
-      this.logger.log(`[AnalysisRepository] Retrieving analysis for file: ${fileId}`);
-      
-      const result = await snowflakeService.executeQuery(
-        `SELECT 
-           ANALYSIS_ID,
-           FILE_ID,
-           ISSUES_FOUND,
-           SUGGESTIONS,
-           QUALITY_SCORE,
-           COMPLEXITY_SCORE,
-           SECURITY_SCORE,
-           STRENGTHS,
-           LEARNING_RECOMMENDATIONS,
-           CREATED_AT
-         FROM ${this.tableName} 
-         WHERE FILE_ID = ?
-         ORDER BY CREATED_AT DESC`,
-        [fileId],
-        { timeout: 30000 }
-      );
-      
-      if (result.rows.length === 0) {
-        this.logger.log(`[AnalysisRepository] Analysis not found for file: ${fileId}`);
-        return null;
-      }
-      
-      const analysis = this.formatAnalysisData(result.rows[0]);
-      this.logger.log(`[AnalysisRepository] Analysis retrieved successfully for file: ${fileId}`);
-      
-      return {
-        success: true,
-        data: analysis
-      };
-      
-    } catch (error) {
-      this.logger.error('[AnalysisRepository] Error retrieving analysis by file ID:', error);
-      throw new Error(`Failed to retrieve analysis: ${error.message}`);
-    }
-  }
+  
 
   /**
    * Get all analyses for a project
@@ -647,6 +626,26 @@ class AnalysisRepository {
     }
   }
 
+  async insertDummyCodeFile(fileId, projectId) {
+    const query = `
+      INSERT INTO CODE_FILES (FILE_ID, PROJECT_ID, FILENAME, LANGUAGE, CREATED_AT)
+      VALUES (?, ?, 'testfile.js', 'javascript', CURRENT_TIMESTAMP())
+    `;
+    await snowflakeService.executeQuery(query, [fileId, projectId]);
+  }
+  
+
+  /**
+ * DEBUG: Get recent analyses directly from the ANALYSES table
+ * @returns {Promise<Array>} Last 10 analysis records
+ */
+  async debugGetAnalyses() {
+    const query = `SELECT * FROM ${this.tableName} ORDER BY CREATED_AT DESC LIMIT 10`;
+    const result = await snowflakeService.executeQuery(query);
+    return result.rows;
+  }
+  
+
   // Private formatting methods
 
   /**
@@ -702,6 +701,128 @@ class AnalysisRepository {
     };
   }
 
+  /**
+ * Get comprehensive analytics summary for a project
+ * @param {string} projectId - Project ID to get analytics for
+ * @returns {Promise<Object>} Project analytics summary
+ */
+  async getProjectAnalyticsSummary(projectId) {
+    try {
+      if (!projectId) {
+        throw new Error('Project ID is required');
+      }
+
+      this.logger.log(`[AnalysisRepository] Retrieving analytics summary for project: ${projectId}`);
+      
+      const query = `
+        SELECT 
+          COUNT(DISTINCT a.ANALYSIS_ID) as TOTAL_ANALYSES,
+          COUNT(DISTINCT a.FILE_ID) as ANALYZED_FILES,
+          AVG(a.QUALITY_SCORE) as AVG_QUALITY_SCORE,
+          AVG(a.COMPLEXITY_SCORE) as AVG_COMPLEXITY_SCORE,
+          AVG(a.SECURITY_SCORE) as AVG_SECURITY_SCORE,
+          MIN(a.QUALITY_SCORE) as MIN_QUALITY_SCORE,
+          MAX(a.QUALITY_SCORE) as MAX_QUALITY_SCORE,
+          MIN(a.COMPLEXITY_SCORE) as MIN_COMPLEXITY_SCORE,
+          MAX(a.COMPLEXITY_SCORE) as MAX_COMPLEXITY_SCORE,
+          MIN(a.SECURITY_SCORE) as MIN_SECURITY_SCORE,
+          MAX(a.SECURITY_SCORE) as MAX_SECURITY_SCORE,
+          COUNT(DISTINCT cf.LANGUAGE) as LANGUAGES_COUNT,
+          MIN(a.CREATED_AT) as FIRST_ANALYSIS,
+          MAX(a.CREATED_AT) as LAST_ANALYSIS
+        FROM ${this.tableName} a
+        JOIN CODE_FILES cf ON a.FILE_ID = cf.FILE_ID
+        WHERE cf.PROJECT_ID = ?`;
+      
+      const result = await snowflakeService.executeQuery(query, [projectId], { timeout: 30000 });
+      
+      if (result.rows.length === 0 || result.rows[0].TOTAL_ANALYSES === 0) {
+        return {
+          success: true,
+          data: {
+            projectId,
+            totalAnalyses: 0,
+            analyzedFiles: 0,
+            message: 'No analyses found for this project'
+          }
+        };
+      }
+      
+      // Get language distribution
+      const languageQuery = `
+        SELECT 
+          cf.LANGUAGE,
+          COUNT(DISTINCT a.ANALYSIS_ID) as ANALYSIS_COUNT,
+          AVG(a.QUALITY_SCORE) as AVG_QUALITY,
+          AVG(a.COMPLEXITY_SCORE) as AVG_COMPLEXITY,
+          AVG(a.SECURITY_SCORE) as AVG_SECURITY
+        FROM ${this.tableName} a
+        JOIN CODE_FILES cf ON a.FILE_ID = cf.FILE_ID
+        WHERE cf.PROJECT_ID = ?
+        GROUP BY cf.LANGUAGE
+        ORDER BY ANALYSIS_COUNT DESC`;
+      
+      const languageResult = await snowflakeService.executeQuery(languageQuery, [projectId], { timeout: 30000 });
+      
+      // Get most common issues - Fixed query to handle JSON parsing properly
+      const issuesQuery = `
+        SELECT 
+          issue_type,
+          issue_severity,
+          COUNT(*) as OCCURRENCE_COUNT
+        FROM (
+          SELECT 
+            a.ANALYSIS_ID,
+            TRY_PARSE_JSON(a.ISSUES_FOUND) as parsed_issues
+          FROM ${this.tableName} a
+          JOIN CODE_FILES cf ON a.FILE_ID = cf.FILE_ID
+          WHERE cf.PROJECT_ID = ?
+          AND a.ISSUES_FOUND IS NOT NULL
+          AND a.ISSUES_FOUND != '[]'
+          AND a.ISSUES_FOUND != ''
+        ) issues_data,
+        LATERAL FLATTEN(input => CASE 
+          WHEN IS_ARRAY(issues_data.parsed_issues) THEN issues_data.parsed_issues 
+          ELSE ARRAY_CONSTRUCT() 
+        END) as flattened_issues,
+        LATERAL (
+          SELECT 
+            GET(flattened_issues.value, 'type')::STRING as issue_type,
+            GET(flattened_issues.value, 'severity')::STRING as issue_severity
+        ) as issue_details
+        WHERE issue_type IS NOT NULL
+        GROUP BY issue_type, issue_severity
+        ORDER BY OCCURRENCE_COUNT DESC
+        LIMIT 10`;
+      
+      let issuesResult;
+      try {
+        issuesResult = await snowflakeService.executeQuery(issuesQuery, [projectId], { timeout: 30000 });
+      } catch (issuesError) {
+        console.warn('[AnalysisRepository] Could not retrieve common issues:', issuesError.message);
+        // Return empty array if issues query fails
+        issuesResult = { rows: [] };
+      }
+      
+      const summary = this.formatProjectAnalyticsSummary(result.rows[0]);
+      summary.projectId = projectId;
+      summary.languageDistribution = languageResult.rows.map(row => this.formatLanguageDistribution(row));
+      summary.commonIssues = issuesResult.rows.map(row => this.formatCommonIssue(row));
+      
+      this.logger.log(`[AnalysisRepository] Analytics summary retrieved for project: ${projectId}`);
+      
+      return {
+        success: true,
+        data: summary
+      };
+      
+    } catch (error) {
+      this.logger.error('[AnalysisRepository] Error retrieving project analytics summary:', error);
+      throw new Error(`Failed to retrieve project analytics: ${error.message}`);
+    }
+  }
+
+  
   /**
    * Format language distribution data
    * @private
@@ -774,5 +895,7 @@ class AnalysisRepository {
     };
   }
 }
+
+
 
 module.exports = new AnalysisRepository();

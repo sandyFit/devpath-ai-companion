@@ -1,3 +1,6 @@
+require('dotenv').config();
+console.log('[DEBUG] SNOWFLAKE_USER:', process.env.SNOWFLAKE_USER); 
+
 const snowflake = require('snowflake-sdk');
 const { v4: uuidv4 } = require('uuid');
 

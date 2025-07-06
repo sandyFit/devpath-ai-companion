@@ -4,7 +4,7 @@ const groqService = require('./groqService');
 const { v4: uuidv4 } = require('uuid');
 
 const ANALYSIS_TYPES = {
-  CODE_QUALITY: 'code_quality',
+  CODE_QUALITY: 'code_quality',  
   COMPLEXITY: 'complexity', 
   SECURITY: 'security',
   BEST_PRACTICES: 'best_practices',
@@ -334,4 +334,7 @@ class AnalysisService {
   }
 }
 
-module.exports = new AnalysisService();
+module.exports = {
+  AnalysisService,
+  ANALYSIS_TYPES 
+};

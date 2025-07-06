@@ -415,6 +415,88 @@ const getProjectAnalyticsSummary = async (req, res) => {
   }
 };
 
+const storeGroqBatchAnalysis = async (req, res) => {
+  try {
+    console.log('[AnalysisController] Storing Groq batch analysis results');
+
+    const { results, projectId } = req.body;
+
+    if (!projectId) {
+      return res.status(400).json({
+        error: 'Missing required "projectId"'
+      });
+    }
+
+    if (!Array.isArray(results)) {
+      return res.status(400).json({
+        error: 'Missing or invalid "results" array in request body'
+      });
+    }
+
+    const storedAnalyses = [];
+    const errors = [];
+
+    for (let i = 0; i < results.length; i++) {
+      const { analysisId, fileId, analysis } = results[i];
+
+      if (!analysis) {
+        errors.push(`Result ${i + 1}: Missing "analysis" object`);
+        continue;
+      }
+
+      try {
+        const analysisData = {
+          analysisId,
+          fileId: fileId || uuidv4(),
+          projectId,
+          analysisType: analysis.analysisType, // ✅ AGREGAR ESTO
+          issuesFound: analysis.issues || [],
+          suggestions: analysis.suggestions || [],
+          qualityScore: analysis.qualityScore ?? 5,
+          complexityScore: analysis.complexityScore ?? 5,
+          securityScore: analysis.securityScore ?? 5,
+          strengths: analysis.strengths || [],
+          learningRecommendations: analysis.learningRecommendations || []
+        };
+        
+        
+        const stored = await analysisRepository.createAnalysis(analysisData);
+
+        if (stored?.success && stored?.data?.analysisId) {
+          storedAnalyses.push(stored.data.analysisId);
+        } else {
+          errors.push(`Result ${i + 1}: Insert returned no analysisId`);
+        }
+
+      } catch (err) {
+        errors.push(`Result ${i + 1}: Failed to create analysis: ${err.message}`);
+      }
+    }
+
+    const response = {
+      success: errors.length === 0,
+      message:
+        errors.length === 0
+          ? 'Groq batch analysis results stored successfully'
+          : `Batch analysis results processed with ${errors.length} errors`,
+      total: results.length,
+      inserted: storedAnalyses.length,
+      analysisIds: storedAnalyses,
+      projectId
+    };
+
+    if (errors.length) response.errors = errors;
+
+    res.status(errors.length ? 400 : 200).json(response);
+
+  } catch (error) {
+    console.error('[storeGroqBatchAnalysis] Error:', error);
+    res.status(500).json({ error: 'Failed to store Groq analyses', details: error.message });
+  }
+};
+
+
+
 module.exports = {
   analyzeFile,
   analyzeExtractedFiles,
@@ -423,5 +505,6 @@ module.exports = {
   getAnalysisStats,
   getAvailableAnalysisTypes,
   getProjectAnalyses,
-  getProjectAnalyticsSummary
+  getProjectAnalyticsSummary,
+  storeGroqBatchAnalysis
 };

@@ -7,10 +7,19 @@ const analysisRoutes = require('./routes/analysisRoutes');
 const snowflakeRoutes = require('./routes/snowflakeRoutes');
 const databaseRoutes = require('./routes/databaseRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const learningPathRoutes = require('./routes/learningPathRoutes');
 const snowflakeConfig = require('./config/snowflake');
 const snowflakeService = require('./services/snowflakeService');
 
+
 const app = express();
+
+app.use((req, res, next) => {
+    console.log(`[ROUTING DEBUG] ${req.method} ${req.originalUrl}`);
+    next();
+  });
+
+  
 
 // Middleware
 app.use(morgan('dev'));
@@ -82,6 +91,7 @@ app.use('/analyze', analysisRoutes);
 app.use('/', snowflakeRoutes);
 app.use('/', databaseRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/learning-paths', learningPathRoutes);
 
 // Database health check endpoint
 app.get('/api/health/database', async (req, res) => {
@@ -102,6 +112,7 @@ app.get('/api/health/database', async (req, res) => {
   }
 });
 
+ 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
 
@@ -113,13 +124,8 @@ app.use((err, req, res, next) => {
 
 // Start server with connection validation
 const PORT = process.env.PORT || 3800;
-connectWithRetry()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Express server listening on port ${PORT}`);
-    });
-  })
-  .catch(err => {
-    console.error('[Server] Failed to start server:', err);
-    process.exit(1);
-  });
+app.listen(PORT, () => {
+  console.log(`[SERVER] Analysis API server running on port ${PORT}`);
+  console.log(`[SERVER] Health check: http://localhost:${PORT}/health`);
+  console.log(`[SERVER] Store analysis: http://localhost:${PORT}/analyze/store`);
+});
