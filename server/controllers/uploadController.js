@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { extractZipContents } = require('../services/zipService');
-const projectRepository = require('../src/repositories/projectRepository');
+const projectRepository = require('../repositories/projectRepository');
 const { v4: uuidv4 } = require('uuid');
 
 const uploadHandler = async (req, res) => {

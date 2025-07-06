@@ -1,5 +1,5 @@
 const databaseInitService = require('../services/databaseInitService');
-const projectRepository = require('../src/repositories/projectRepository');
+const projectRepository = require('../repositories/projectRepository');
 const { v4: uuidv4 } = require('uuid');
 
 const initializeDatabase = async (req, res) => {

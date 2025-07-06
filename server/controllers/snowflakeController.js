@@ -1,5 +1,4 @@
 const snowflakeService = require('../services/snowflakeService');
-const { v4: uuidv4 } = require('uuid');
 
 
 const connect = async (req, res) => {

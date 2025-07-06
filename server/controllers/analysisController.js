@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const analysisService = require('../services/analysisService');
-const analysisRepository = require('../src/repositories/analysisRepository');
-const projectRepository = require('../src/repositories/projectRepository');
+const analysisRepository = require('../repositories/analysisRepository');
+const projectRepository = require('../repositories/projectRepository');
 const { v4: uuidv4 } = require('uuid');
 
 const ANALYSIS_TYPES = {
