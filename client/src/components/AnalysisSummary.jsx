@@ -17,7 +17,8 @@ const AnalysisSummary = ({ data }) => {
                 </div>
                 <div>
                     <span className="text-slate-400">Issues Found:</span>
-                    <span className="ml-2 text-red-400">{data.issues.length}</span>
+                    <span className="ml-2 text-red-400">{data.issues?.length ?? 0}</span>
+
                 </div>
                 <div>
                     <span className="text-slate-400">Next Learning Path:</span>

@@ -413,6 +413,51 @@ const getProjectAnalyticsSummary = async (req, res) => {
 
 const storeGroqBatchAnalysis = async (req, res) => {
   try {
+    console.log('[Mock Mode] Returning fake Groq batch analysis results');
+
+    // 🔁 Return mock response if `mock` flag is present
+    if (req.body.mock === true) {
+      // Simulate an LLM delay
+      await new Promise((res) => setTimeout(res, 1500));
+
+      return res.status(200).json({
+        success: true,
+        message: 'Mock Groq batch analysis stored successfully',
+        projectId: req.body.projectId || 'mock-project-id',
+        analysisIds: ['mock-analysis-1', 'mock-analysis-2'],
+        data: [
+          {
+            analysisId: 'eeafb2fb-a399-4284-841d-adb710040b78',
+            qualityScore: 8,
+            complexityScore: 7,
+            securityScore: 9,
+            issues: [
+              { type: 'Unused import', description: 'The \'os\' module is imported but not used.' },
+              { type: 'Magic number', description: 'The number 1024 is used multiple times, consider defining a constant.' },
+              { type: 'Error handling', description: 'The error handling in the \'file_uploader_component\' function can be improved.' }
+            ],
+            strengths: ['Good use of docstrings for function documentation.', 'Consistent coding style throughout the code.'],
+            suggestions: [
+              'Consider adding input validation for the \'api_url\' and \'user_role\' parameters.',
+              'Use a more robust way to handle file uploads, such as using a library like \'requests\' instead of \'httpx\'.'
+            ],
+            learningRecommendations: [
+              'Learn about best practices for error handling in Python.',
+              'Study the \'requests\' library for making HTTP requests in Python.'
+            ]
+          },
+          {
+            analysisId: 'project-level-id-1',
+            overallScore: 7,
+            mainIssues: ['Poor modularity'],
+            suggestions: ['Split components by concern'],
+            recommendedTopics: ['React architecture', 'SOLID principles']
+          }
+        ]
+      });
+    }
+
+
     console.log('[AnalysisController] Storing Groq batch analysis results');
 
     const { results, projectId } = req.body;

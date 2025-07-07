@@ -63,7 +63,7 @@ app.get('/api/health/database', async (req, res) => {
 });
 
 // Basic health check
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 

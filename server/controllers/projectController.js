@@ -139,26 +139,85 @@ const deleteProject = async (req, res) => {
 const getProjectSummary = async (req, res) => {
   try {
     const { projectId } = req.params;
-    
-    console.log(`[ProjectController] Retrieving project summary: ${projectId}`);
-    
+
+    // ✅ Use query string or body to trigger mock
+    const isMock = req.query.mock === 'true' || req.body?.mock === true;
+
     if (!projectId) {
-      return res.status(400).json({ 
-        error: 'Project ID is required' 
+      return res.status(400).json({ error: 'Project ID is required' });
+    }
+
+    if (isMock) {
+      console.log(`[Mock Mode] Returning mock project summary for projectId: ${projectId}`);
+
+      // ⬇️ Your mock data goes here
+      const mockProject = {
+        projectId,
+        name: 'Mock AI Project',
+        description: 'This is a mock project for testing frontend integration',
+        status: 'COMPLETED',
+        createdAt: '2024-11-01T10:00:00Z',
+        updatedAt: '2024-11-10T12:00:00Z',
+        totalFiles: 12,
+        languages: ['JavaScript', 'Python']
+      };
+
+      const mockAnalytics = {
+        totalAnalyses: 12,
+        avgQualityScore: 8.5,
+        avgComplexityScore: 7.2,
+        avgSecurityScore: 9.0,
+        totalIssues: 20,
+        totalSuggestions: 40,
+        topIssueTypes: [
+          { type: 'Code Quality', count: 10 },
+          { type: 'Security', count: 6 },
+          { type: 'Complexity', count: 4 }
+        ],
+        languageBreakdown: [
+          { language: 'JavaScript', files: 8, avgScore: 8.6 },
+          { language: 'Python', files: 4, avgScore: 8.3 }
+        ]
+      };
+
+      const mockLearningPaths = [
+        {
+          topic: 'Clean Code in JavaScript',
+          type: 'video',
+          url: 'https://youtube.com/clean-code-js',
+          source: 'YouTube',
+          estimatedTime: '25 mins'
+        },
+        {
+          topic: 'Python Security Tips',
+          type: 'article',
+          url: 'https://realpython.com/python-security/',
+          source: 'Real Python',
+          estimatedTime: '15 mins'
+        }
+      ];
+
+      return res.json({
+        success: true,
+        data: {
+          project: mockProject,
+          analytics: mockAnalytics,
+          learningPaths: mockLearningPaths
+        }
       });
     }
-    
-    // Get project details
+
+    // 🔁 Real logic follows if not mock
+    console.log(`[ProjectController] Retrieving project summary: ${projectId}`);
+
     const projectResult = await projectRepository.getProjectById(projectId);
-    
     if (!projectResult.data) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Project not found',
         details: `No project found with ID: ${projectId}`
       });
     }
-    
-    // Get project analytics summary
+
     let analyticsSummary = null;
     try {
       const analyticsResult = await analysisRepository.getProjectAnalyticsSummary(projectId);
@@ -166,7 +225,7 @@ const getProjectSummary = async (req, res) => {
     } catch (analyticsError) {
       console.warn('[ProjectController] Could not retrieve analytics summary:', analyticsError.message);
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -174,15 +233,16 @@ const getProjectSummary = async (req, res) => {
         analytics: analyticsSummary
       }
     });
-    
+
   } catch (error) {
     console.error('[ProjectController] Error in getProjectSummary:', error);
-    res.status(500).json({ 
-      error: 'Failed to retrieve project summary', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Failed to retrieve project summary',
+      details: error.message
     });
   }
 };
+
 
 module.exports = {
   getProject,

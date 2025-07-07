@@ -21,7 +21,7 @@ router.get('/stats', analysisController.getAnalysisStats);
 router.get('/types', analysisController.getAvailableAnalysisTypes);
 router.get('/project/:projectId/analyses', analysisController.getProjectAnalyses);
 router.get('/project/:projectId/summary', analysisController.getProjectAnalyticsSummary);
-router.post('/analize/store', analysisController.storeGroqBatchAnalysis);
+router.post('/analyze/store', analysisController.storeGroqBatchAnalysis);
 
 
 
