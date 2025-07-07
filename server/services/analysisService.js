@@ -1,11 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const groqService = require('./groqService');
 const { v4: uuidv4 } = require('uuid');
+const groqService = require('./groqService');
+const analysisRepository = require('../repositories/analysisRepository'); 
 
 const ANALYSIS_TYPES = {
-  CODE_QUALITY: 'code_quality',  
-  COMPLEXITY: 'complexity', 
+  CODE_QUALITY: 'code_quality',
+  COMPLEXITY: 'complexity',
   SECURITY: 'security',
   BEST_PRACTICES: 'best_practices',
   LEARNING_GAPS: 'learning_gaps'
@@ -13,60 +14,81 @@ const ANALYSIS_TYPES = {
 
 class AnalysisService {
   constructor() {
-    this.analysisResults = new Map(); // In-memory storage for demo purposes
-    
-    // Enhanced file configuration
+    this.analysisResults = new Map();
+
     this.FILE_CONFIG = {
-      maxFileSize: 50000, // 50KB per file
-      maxBatchSize: 500000, // 500KB total for batch
-      maxBatchFiles: 20, // Maximum files in one batch
-      supportedExtensions: ['.js', '.jsx', '.py',],
-      priorityExtensions: ['.js', '.jsx', '.py'] // High priority for common languages
+      maxFileSize: 50000,
+      maxBatchSize: 500000,
+      maxBatchFiles: 20,
+      supportedExtensions: ['.js', '.jsx', '.py'],
+      priorityExtensions: ['.js', '.jsx', '.py']
     };
   }
 
   async analyzeFile(fileData, isHighPriority = null) {
     try {
-      console.log(`[AnalysisService] Starting analysis for file: ${fileData.filename}`);
-      
-      // Validate input
+      console.log(`[AnalysisService] Analyzing file: ${fileData.filename}`);
       this.validateAnalysisRequest(fileData);
-      
-      // Auto-detect priority if not specified
+
       if (isHighPriority === null) {
         isHighPriority = this.isPriorityFile(fileData.filename);
       }
-      
-      // Generate unique analysis ID
+
       const analysisId = uuidv4();
+
+      const result = await groqService.analyzeCode(
+        fileData.content,
+        fileData.language,
+        fileData.analysisTypes,
+        isHighPriority
+      );
       
-      // Perform analysis using Groq service
-      const result = await groqService.analyzeCode(fileData, isHighPriority);
-      
-      // Store result with analysis ID
-      this.analysisResults.set(analysisId, {
-        ...result,
+
+      const fullResult = {
         analysisId,
+        ...result,
         timestamp: new Date().toISOString(),
         filename: fileData.filename,
         language: fileData.language,
         isHighPriority
-      });
-      
-      console.log(`[AnalysisService] Analysis completed with ID: ${analysisId}, Priority: ${isHighPriority}`);
-      
+      };
+
+      this.analysisResults.set(analysisId, fullResult);
+
+      // ✅ Save to DB
+      if (fileData.projectId) {
+        await analysisRepository.createAnalysis({
+          analysisId,
+          fileId: result.fileId || fileData.fileId || uuidv4(),
+          projectId: fileData.projectId,
+          analysisType: fileData.analysisTypes?.[0] || 'code_quality',
+          qualityScore: result.analysis.qualityScore,
+          complexityScore: result.analysis.complexityScore,
+          securityScore: result.analysis.securityScore,
+          issuesFound: result.analysis.issues || [],
+          strengths: result.analysis.strengths || [],
+          suggestions: result.analysis.suggestions || [],
+          learningRecommendations: result.analysis.learningRecommendations || []
+        });
+        console.log(`[AnalysisService] Stored analysis ${analysisId} in DB`);
+      }
+
       return {
         analysisId,
         ...result
       };
-      
+
     } catch (error) {
-      console.error('[AnalysisService] Error during file analysis:', error);
+      console.error('[AnalysisService] Error during analysis:', error);
       throw error;
     }
   }
 
-  async analyzeBatch(extractedDir, analysisTypes = Object.values(ANALYSIS_TYPES)) {
+  async analyzeBatch(extractedDir, analysisTypes) {
+    const types = Array.isArray(analysisTypes) && analysisTypes.length > 0
+      ? analysisTypes
+      : Object.values(ANALYSIS_TYPES);
+  
     try {
       console.log(`[AnalysisService] Starting batch analysis in directory: ${extractedDir}`);
       
@@ -97,8 +119,9 @@ class AnalysisService {
             filename: file.name,
             language: this.detectLanguage(file.name),
             content: fileContent,
-            analysisTypes
+            analysisTypes: types
           };
+          
           
           console.log(`[AnalysisService] Processing file ${index + 1}/${sortedFiles.length}: ${file.name} (Priority: ${isHighPriority})`);
           
@@ -334,7 +357,11 @@ class AnalysisService {
   }
 }
 
+// Export a singleton instance instead of the class
+const analysisService = new AnalysisService();
+
 module.exports = {
-  AnalysisService,
+  analysisService,        // Export the instance
+  AnalysisService,        // Keep the class export for testing
   ANALYSIS_TYPES 
 };

@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const morgan = require('morgan');
 const uploadRoutes = require('./routes/uploadRoutes');
 const groqRoutes = require('./routes/groqRoutes');
@@ -10,88 +11,37 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const learningPathRoutes = require('./routes/learningPathRoutes');
 const snowflakeConfig = require('./config/snowflake');
 const snowflakeService = require('./services/snowflakeService');
-
+const projectRoutes = require('./routes/projectRoutes');
 
 const app = express();
+
+// Enable CORS for all origins (dev mode)
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use((req, res, next) => {
     console.log(`[ROUTING DEBUG] ${req.method} ${req.originalUrl}`);
     next();
-  });
-
-  
+});
 
 // Middleware
 app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Connection validation with retry logic
-async function connectWithRetry(retries = 5, delay = 1000) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      await snowflakeService.connect();
-      console.log('[Server] Connected to Snowflake successfully');
-      return;
-    } catch (error) {
-      console.error(`[Server] Snowflake connection attempt ${i + 1} failed:`, error.message);
-      if (i < retries - 1) {
-        const backoff = delay * Math.pow(2, i);
-        console.log(`[Server] Retrying in ${backoff} ms...`);
-        await new Promise(resolve => setTimeout(resolve, backoff));
-      } else {
-        console.error('[Server] All Snowflake connection attempts failed');
-        process.exit(1);
-      }
-    }
-  }
-}
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Routes
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Welcome to the modular Express.js server with Groq AI integration!',
-    endpoints: {
-      upload: 'POST /upload - Upload and extract ZIP files',
-      analysis: {
-        file: 'POST /analyze/file - Analyze single file',
-        batch: 'POST /analyze/batch - Analyze all extracted files',
-        results: 'GET /analyze/results/:id - Get analysis result',
-        allResults: 'GET /analyze/results - Get all results',
-        stats: 'GET /analyze/stats - Get analysis statistics',
-        types: 'GET /analyze/types - Get available analysis types'
-      },
-      snowflake: {
-        connect: 'POST /snowflake/connect - Connect to Snowflake',
-        disconnect: 'POST /snowflake/disconnect - Disconnect from Snowflake',
-        status: 'GET /snowflake/status - Get connection status',
-        health: 'GET /snowflake/health - Health check',
-        query: 'POST /snowflake/query - Execute single query',
-        batch: 'POST /snowflake/batch - Execute batch queries',
-        templates: 'GET /snowflake/templates - Get query templates'
-      },
-      database: {
-        init: 'POST /database/init - Initialize database schema',
-        schema: 'GET /database/schema - Get schema information',
-        projects: 'POST /database/projects - Create new project',
-        projectSummary: 'GET /database/projects/:id/summary - Get project summary',
-        projectStatus: 'PUT /database/projects/:id/status - Update project status',
-        files: 'POST /database/files - Insert code file',
-        analysis: 'POST /database/analysis - Insert analysis results',
-        learningPaths: 'POST /database/learning-paths - Create learning path',
-        userProgress: 'GET /database/users/:id/learning-progress - Get user progress',
-        insights: 'GET /database/insights/code-quality - Get code quality insights'
-      }
-    }
-  });
-});
-app.use('/', uploadRoutes);
-app.use('/', groqRoutes);
-app.use('/analyze', analysisRoutes);
-app.use('/', snowflakeRoutes);
-app.use('/', databaseRoutes);
+app.use('/api', uploadRoutes);
+app.use('/api', groqRoutes);
+app.use('/api', analysisRoutes);
+app.use('/api', snowflakeRoutes);
+app.use('/api', databaseRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/learning-paths', learningPathRoutes);
+app.use('/api', projectRoutes);
 
 // Database health check endpoint
 app.get('/api/health/database', async (req, res) => {
@@ -112,20 +62,51 @@ app.get('/api/health/database', async (req, res) => {
   }
 });
 
- 
-// 404
-app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
+// Basic health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// 404 handler
+app.use((req, res) => {
+  console.log(`[404] ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ error: 'Not Found' });
+});
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+  console.error('[ERROR]', err.stack);
+  
+  // Handle multer errors
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'File too large. Max size is 50MB.' });
+  }
+  
+  res.status(err.status || 500).json({ 
+    error: err.message || 'Internal Server Error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
 });
 
 // Start server with connection validation
 const PORT = process.env.PORT || 3800;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[SERVER] Analysis API server running on port ${PORT}`);
   console.log(`[SERVER] Health check: http://localhost:${PORT}/health`);
-  console.log(`[SERVER] Store analysis: http://localhost:${PORT}/analyze/store`);
+  console.log(`[SERVER] Store analysis: http://localhost:${PORT}/api/analyze/store`);
+  console.log(`[SERVER] Upload endpoint: http://localhost:${PORT}/api/upload`);
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  console.error('[SERVER ERROR]', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[UNCAUGHT EXCEPTION]', error);
+  process.exit(1);
 });

@@ -1,17 +1,10 @@
 const fs = require('fs');
 const path = require('path');
-const analysisService = require('../services/analysisService');
+const { analysisService, ANALYSIS_TYPES } = require('../services/analysisService');
 const analysisRepository = require('../repositories/analysisRepository');
 const projectRepository = require('../repositories/projectRepository');
 const { v4: uuidv4 } = require('uuid');
 
-const ANALYSIS_TYPES = {
-  CODE_QUALITY: 'code_quality',
-  COMPLEXITY: 'complexity', 
-  SECURITY: 'security',
-  BEST_PRACTICES: 'best_practices',
-  LEARNING_GAPS: 'learning_gaps'
-};
 
 const analyzeFile = async (req, res) => {
   try {
@@ -48,14 +41,16 @@ const analyzeFile = async (req, res) => {
     if (analysisResult && analysisResult.analysis) {
       try {
         const analysisData = {
-          fileId: fileData.fileId,
+          fileId: result.fileId,
           issuesFound: analysisResult.analysis.issues || [],
           suggestions: analysisResult.analysis.suggestions || [],
           qualityScore: analysisResult.analysis.qualityScore || 5,
           complexityScore: analysisResult.analysis.complexityScore || 5,
           securityScore: analysisResult.analysis.securityScore || 5,
           strengths: analysisResult.analysis.strengths || [],
-          learningRecommendations: analysisResult.analysis.learningRecommendations || []
+          learningRecommendations: analysisResult.analysis.learningRecommendations || [],
+          filename: fileData.filename,
+          language: fileData.language
         };
 
         storedAnalysis = await analysisRepository.createAnalysis(analysisData);
@@ -138,6 +133,7 @@ const analyzeExtractedFiles = async (req, res) => {
         try {
           const analysisData = {
             fileId: result.fileId || uuidv4(),
+            projectId: projectId || null, 
             issuesFound: result.analysis.issues || [],
             suggestions: result.analysis.suggestions || [],
             qualityScore: result.analysis.qualityScore || 5,
@@ -449,7 +445,7 @@ const storeGroqBatchAnalysis = async (req, res) => {
           analysisId,
           fileId: fileId || uuidv4(),
           projectId,
-          analysisType: analysis.analysisType, // ✅ AGREGAR ESTO
+          analysisType: results[i].analysisTypes?.join(', ') || 'unspecified',
           issuesFound: analysis.issues || [],
           suggestions: analysis.suggestions || [],
           qualityScore: analysis.qualityScore ?? 5,

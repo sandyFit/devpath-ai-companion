@@ -1,5 +1,5 @@
-const projectRepository = require('../src/repositories/projectRepository');
-const analysisRepository = require('../src/repositories/analysisRepository');
+const projectRepository = require('../repositories/projectRepository');
+const analysisRepository = require('../repositories/analysisRepository');
 
 const getProject = async (req, res) => {
   try {

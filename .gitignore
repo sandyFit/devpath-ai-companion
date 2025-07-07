@@ -6,6 +6,7 @@ node_modules/
 client/.next/
 client/build/
 client/dist/
+client/node_modules/
 
 # Server
 server/node_modules/

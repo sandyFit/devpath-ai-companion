@@ -155,47 +155,79 @@ class DatabaseInitService {
     }
   }
 
-  async insertAnalysis(analysisData) {
-    try {
-      const { 
-        analysisId, 
-        fileId, 
-        issuesFound, 
-        suggestions, 
-        qualityScore, 
-        complexityScore, 
-        securityScore,
-        strengths,
-        learningRecommendations
-      } = analysisData;
-      
-      const result = await snowflakeService.executeQuery(
-        `INSERT INTO ANALYSIS (
-          ANALYSIS_ID, FILE_ID, ISSUES_FOUND, SUGGESTIONS, 
-          QUALITY_SCORE, COMPLEXITY_SCORE, SECURITY_SCORE,
-          STRENGTHS, LEARNING_RECOMMENDATIONS
-        ) VALUES (?, ?, PARSE_JSON(?), PARSE_JSON(?), ?, ?, ?, PARSE_JSON(?), PARSE_JSON(?))`,
-        [
-          analysisId, 
-          fileId, 
-          JSON.stringify(issuesFound), 
-          JSON.stringify(suggestions),
-          qualityScore, 
-          complexityScore, 
-          securityScore,
-          JSON.stringify(strengths),
-          JSON.stringify(learningRecommendations)
-        ],
-        { timeout: 30000 }
-      );
-      
-      return result;
-      
-    } catch (error) {
-      console.error('[DatabaseInitService] Error inserting analysis:', error);
-      throw error;
-    }
-  }
+  async insertAnalysis  (analysisData) {
+    const {
+      analysisId,
+      fileId,
+      projectId,
+      analysisType,
+      issuesFound,
+      suggestions,
+      qualityScore,
+      complexityScore,
+      securityScore,
+      bestPracticesScore,
+      learningGaps,
+      strengths,
+      learningRecommendations,
+      skillLevelAssessment,
+      improvementPriority,
+      recommendedResources,
+      analysisModel,
+      processingTimeMs,
+      createdAt
+    } = analysisData;
+  
+    const sql = `
+      INSERT INTO ANALYSES (
+        ANALYSIS_ID,
+        FILE_ID,
+        PROJECT_ID,
+        ANALYSIS_TYPE,
+        ISSUES_FOUND,
+        SUGGESTIONS,
+        QUALITY_SCORE,
+        COMPLEXITY_SCORE,
+        SECURITY_SCORE,
+        BEST_PRACTICES_SCORE,
+        LEARNING_GAPS,
+        STRENGTHS,
+        LEARNING_RECOMMENDATIONS,
+        SKILL_LEVEL_ASSESSMENT,
+        IMPROVEMENT_PRIORITY,
+        RECOMMENDED_RESOURCES,
+        ANALYSIS_MODEL,
+        PROCESSING_TIME_MS,
+        CREATED_AT
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+  
+    const values = [
+      analysisId,
+      fileId,
+      projectId,
+      analysisType,
+      JSON.stringify(issuesFound),
+      JSON.stringify(suggestions),
+      qualityScore,
+      complexityScore,
+      securityScore,
+      bestPracticesScore,
+      learningGaps,
+      JSON.stringify(strengths),
+      JSON.stringify(learningRecommendations),
+      skillLevelAssessment,
+      improvementPriority,
+      JSON.stringify(recommendedResources),
+      analysisModel,
+      processingTimeMs,
+      createdAt
+    ];
+  
+    // Execute the insert (adapt to your Snowflake client syntax)
+    return await snowflakeService.executeQuery(sql, values, { timeout: 60000 });
+  };
+  
 
   async createLearningPath(learningPathData) {
     try {

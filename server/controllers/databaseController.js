@@ -159,18 +159,27 @@ const insertAnalysis = async (req, res) => {
   try {
     console.log('[DatabaseController] Received insert analysis request');
     console.log('[DatabaseController] Request body:', req.body);
-    
-    const { 
-      fileId, 
-      issuesFound, 
-      suggestions, 
-      qualityScore, 
-      complexityScore, 
+
+    const {
+      fileId,
+      projectId,
+      analysisType,
+      issuesFound,
+      suggestions,
+      qualityScore,
+      complexityScore,
       securityScore,
+      bestPracticesScore,
+      learningGaps,
       strengths,
-      learningRecommendations
+      learningRecommendations,
+      skillLevelAssessment,
+      improvementPriority,
+      recommendedResources,
+      analysisModel,
+      processingTimeMs
     } = req.body;
-    
+
     // Validate required fields
     if (!fileId || qualityScore === undefined || complexityScore === undefined || securityScore === undefined) {
       return res.status(400).json({
@@ -178,38 +187,47 @@ const insertAnalysis = async (req, res) => {
         details: 'fileId, qualityScore, complexityScore, and securityScore are required'
       });
     }
-    
+
     // Generate analysis ID
     const analysisId = uuidv4();
+
     
+
     // Insert analysis
     const result = await databaseInitService.insertAnalysis({
       analysisId,
       fileId,
+      projectId: projectId || null,
+      analysisType: analysisType || 'batch',
       issuesFound: issuesFound || [],
       suggestions: suggestions || [],
       qualityScore,
       complexityScore,
       securityScore,
+      bestPracticesScore: bestPracticesScore || null,
+      learningGaps: learningGaps || null,
       strengths: strengths || [],
-      learningRecommendations: learningRecommendations || []
+      learningRecommendations: learningRecommendations || [],
+      skillLevelAssessment: skillLevelAssessment || null,
+      improvementPriority: improvementPriority || null,
+      recommendedResources: recommendedResources || null,
+      analysisModel: analysisModel || 'unknown',
+      processingTimeMs: processingTimeMs || null,
+      createdAt: new Date()
     });
-    
+
     console.log(`[DatabaseController] Analysis inserted successfully: ${analysisId}`);
-    
+
     res.json({
       success: true,
       message: 'Analysis inserted successfully',
       data: {
         analysisId,
         fileId,
-        qualityScore,
-        complexityScore,
-        securityScore,
         result
       }
     });
-    
+
   } catch (error) {
     console.error('[DatabaseController] Error in insertAnalysis:', error);
     res.status(500).json({
@@ -218,6 +236,7 @@ const insertAnalysis = async (req, res) => {
     });
   }
 };
+
 
 const createLearningPath = async (req, res) => {
   try {

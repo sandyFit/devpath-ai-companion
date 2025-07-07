@@ -40,11 +40,16 @@ class ProjectRepository {
       this.logger.log(`[ProjectRepository] Creating project: ${projectId} for user: ${userId}`);
       
       // Use stored procedure for project creation with validation
-      const result = await snowflakeService.executeQuery(
-        'CALL SP_CREATE_PROJECT(?, ?, ?)',
-        [projectId, userId, projectName],
-        { timeout: 30000 }
-      );
+      const result = await snowflakeService.executeQuery(`
+        INSERT INTO PROJECTS (PROJECT_ID, USER_ID, PROJECT_NAME, STATUS)
+        VALUES (?, ?, ?, 'PENDING')
+      `, [projectId, userId, projectName]);
+
+      if (!projectId || !userId || !projectName?.trim()) {
+        throw new Error('All fields are required');
+      }
+      
+      
       
       this.logger.log(`[ProjectRepository] Project created successfully: ${projectId}`);
       
