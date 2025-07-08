@@ -41,7 +41,9 @@ const analyzeFile = async (req, res) => {
     if (analysisResult && analysisResult.analysis) {
       try {
         const analysisData = {
-          fileId: result.fileId,
+          fileId: analysisResult.fileId || uuidv4(),
+          projectId: projectId || null,
+          analysisType: types[0] || 'code_quality',
           issuesFound: analysisResult.analysis.issues || [],
           suggestions: analysisResult.analysis.suggestions || [],
           qualityScore: analysisResult.analysis.qualityScore || 5,
@@ -122,7 +124,7 @@ const analyzeExtractedFiles = async (req, res) => {
     }
     
     // Perform batch analysis using existing service
-    const batchResult = await analysisService.analyzeBatch(extractedDir, types);
+    const batchResult = await analysisService.analyzeBatch(extractedDir, types, projectId);
     
     // Store successful analyses in Snowflake
     const storedAnalyses = [];
@@ -133,7 +135,10 @@ const analyzeExtractedFiles = async (req, res) => {
         try {
           const analysisData = {
             fileId: result.fileId || uuidv4(),
-            projectId: projectId || null, 
+            projectId: projectId || null,
+            analysisType: types.length > 0 ? types[0] : 'code_quality', // Use first analysis type
+            filename: result.filename,
+            language: result.language,
             issuesFound: result.analysis.issues || [],
             suggestions: result.analysis.suggestions || [],
             qualityScore: result.analysis.qualityScore || 5,
@@ -143,16 +148,23 @@ const analyzeExtractedFiles = async (req, res) => {
             learningRecommendations: result.analysis.learningRecommendations || []
           };
 
+          console.log('[BATCH DEBUG] Saving analysis for:', result.filename);
+          console.log('[BATCH DEBUG] Analysis data payload:', analysisData);
+
           const storedAnalysis = await analysisRepository.createAnalysis(analysisData);
+
+          console.log('[BATCH DEBUG] Saved analysis result:', storedAnalysis);
+
           storedAnalyses.push({
             filename: result.filename,
             analysisId: storedAnalysis.data.analysisId,
             originalAnalysisId: result.analysisId
           });
           successfulStores++;
-          
+
         } catch (dbError) {
-          console.warn(`[AnalysisController] Could not store analysis for ${result.filename}:`, dbError.message);
+          console.error(`[AnalysisController] Could not store analysis for ${result.filename}:`, dbError.message);
+          console.error('[AnalysisController] Full error details:', dbError);
         }
       }
     }
@@ -536,6 +548,90 @@ const storeGroqBatchAnalysis = async (req, res) => {
   }
 };
 
+const mockGroqBatchAnalysis = async (req, res) => {
+  const { projectId } = req.params;
+
+  if (!projectId) {
+    return res.status(400).json({ error: 'Missing projectId in request params' });
+  }
+
+  try {
+    console.log(`[MockAnalysis] Creating fake analyses for project ${projectId}`);
+
+    const mockResults = [
+      {
+        filename: 'src/App.js',
+        qualityScore: 7.5,
+        complexityScore: 4.2,
+        securityScore: 6.8,
+        overallScore: 6.2,
+        issues: [
+          { type: 'Code Smell', description: 'Use of var instead of let/const', line: 23 }
+        ],
+        strengths: ['Readable naming conventions', 'Separation of concerns'],
+        suggestions: ['Use const where possible', 'Split large components'],
+        learningRecommendations: ['MDN: let vs const', 'Clean Code by Uncle Bob']
+      },
+      {
+        filename: 'src/utils/helpers.js',
+        qualityScore: 8.2,
+        complexityScore: 3.8,
+        securityScore: 7.1,
+        overallScore: 7.3,
+        issues: [],
+        strengths: ['Good function naming', 'Low complexity'],
+        suggestions: ['Add JSDoc comments'],
+        learningRecommendations: ['Documenting JS code']
+      }
+    ];
+
+    const inserted = [];
+
+    for (const result of mockResults) {
+      const analysisData = {
+        analysisId: uuidv4(),
+        fileId: uuidv4(),
+        projectId,
+        analysisType: 'MOCK',
+        filename: result.filename ?? 'src/Unknown.js',
+        issuesFound: Array.isArray(result.issues) ? result.issues : [],
+        suggestions: Array.isArray(result.suggestions) ? result.suggestions : [],
+        strengths: Array.isArray(result.strengths) ? result.strengths : [],
+        learningRecommendations: Array.isArray(result.learningRecommendations) ? result.learningRecommendations : [],
+        qualityScore: result.qualityScore ?? 5,
+        complexityScore: result.complexityScore ?? 5,
+        securityScore: result.securityScore ?? 5,
+        overallScore: result.overallScore ?? (
+          ((result.qualityScore ?? 5) + (result.complexityScore ?? 5) + (result.securityScore ?? 5)) / 3
+        ),
+        createdAt: new Date().toISOString()
+      };
+      
+      
+
+      const stored = await analysisRepository.createAnalysis(analysisData);
+      if (stored?.data?.analysisId) {
+        inserted.push(stored.data.analysisId);
+      }
+    }
+
+    // Update project status to completed
+    await projectRepository.updateProjectStatus(projectId, 'COMPLETED');
+
+    return res.status(201).json({
+      success: true,
+      message: 'Mock analyses created',
+      inserted,
+      projectId
+    });
+
+  } catch (error) {
+    console.error('[mockGroqBatchAnalysis] Error:', error);
+    res.status(500).json({ error: 'Failed to create mock analyses', details: error.message });
+  }
+};
+
+
 
 
 module.exports = {
@@ -547,5 +643,6 @@ module.exports = {
   getAvailableAnalysisTypes,
   getProjectAnalyses,
   getProjectAnalyticsSummary,
-  storeGroqBatchAnalysis
+  storeGroqBatchAnalysis,
+  mockGroqBatchAnalysis
 };

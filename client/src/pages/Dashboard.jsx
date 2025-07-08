@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
-import {
-    Code, Clock, CheckCircle, Brain, TrendingUp,
-    MessageSquare, AlertCircle, Activity, Users, Zap
-} from 'lucide-react';
+import { Code, Brain } from 'lucide-react';
 
 import Header from '../layouts/Header';
 import UserDashboard from '../components/UserDashboard';
@@ -10,7 +7,6 @@ import CodeUpload from '../components/CodeUpload';
 import AgentStatusCard from '../components/AgentStatusCard';
 import AnalysisSummary from '../components/AnalysisSummary';
 import LearningPathCard from '../components/LearningPathsUI/LearningPathsTab';
-import FileAnalysisList from '../components/FileAnalysisList';
 import ProjectAnalysis from '../components/ProjectAnalysis';
 
 const Dashboard = () => {

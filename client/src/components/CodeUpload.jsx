@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { Upload, AlertCircle, CheckCircle, X, FileText, Loader2 } from 'lucide-react';
+import { Upload, AlertCircle, CheckCircle, PlayCircle,  X, FileText, Loader2 } from 'lucide-react';
 import api from '../services/api';
 
 
 const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
-
+    const [projectId, setProjectId] = useState(null);
     const [dragActive, setDragActive] = useState(false);
     const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, success, error
     const [uploadError, setUploadError] = useState('');
@@ -13,21 +13,35 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
     const fileInputRef = useRef(null);
 
     const handleMockUpload = async () => {
-        try {
-          const mockResponse = await api.mockGroqBatchAnalysis('demo-project');
-          console.log('Mock response:', mockResponse.data);
-      
-          if (typeof setAnalysisData !== 'function') {
-            console.warn('⚠️ setAnalysisData is not a function');
-          } else {
-            setAnalysisData(mockResponse.data);
-          }
-        } catch (err) {
-          console.error('Mock analysis failed:', err.message);
+        if (!projectId) {
+            setUploadError('No project uploaded yet');
+            return;
         }
-      };
 
-      
+        try {
+            setIsAnalyzing(true);
+            setUploadStatus('analyzing');
+            setUploadError('');
+
+            console.log('Triggering analysis...');
+            await api.mockGroqBatchAnalysis(projectId);
+
+            console.log('Analysis started. You may want to poll or refresh data here.');
+            setUploadStatus('analyzed');
+
+            if (onResult) {
+                onResult({ projectId }); // trigger reload from parent
+            }
+
+        } catch (error) {
+            console.error('Analysis failed:', error);
+            setUploadStatus('error');
+            setUploadError('Analysis failed. Please try again.');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+    
 
     // Mock user ID - replace with actual user ID from your auth system
     const userId = 'user123'; // You should get this from your auth context
@@ -87,24 +101,23 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
             setUploadError('');
             setIsAnalyzing(true);
 
-            // Test connection first
             console.log('Testing server connection...');
             await api.testConnection();
             console.log('Server connection successful');
 
-            // Upload file
             console.log('Starting upload...');
             const result = await api.uploadProject(selectedFile, userId);
-            
+            setProjectId(result.data?.projectId);
+
             console.log('Upload completed:', result);
+
             setUploadStatus('success');
             setUploadProgress(100);
-            
-            // Call the callback with results
+
             if (onResult) {
-                onResult(result);
+                onResult(result); // send result to parent so it can save projectId
             }
-            
+
         } catch (error) {
             console.error('Upload failed:', error);
             setUploadStatus('error');
@@ -113,6 +126,7 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
             setIsAnalyzing(false);
         }
     };
+    
 
     const resetUpload = () => {
         setSelectedFile(null);
@@ -238,13 +252,14 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
             )}
 
             {/* Upload Button */}
-            <div className="mt-6 flex justify-center">
+            <div className="mt-6 flex justify-center gap-4">
+                {/* Upload Button */}
                 <button
                     onClick={handleUpload}
                     disabled={!selectedFile || uploadStatus === 'uploading'}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 
-                        disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors duration-200
-                        flex items-center space-x-2"
+            disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors duration-200
+            flex items-center space-x-2"
                 >
                     {uploadStatus === 'uploading' ? (
                         <>
@@ -254,12 +269,34 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
                     ) : (
                         <>
                             <Upload className="w-4 h-4" />
-                            <span>Upload & Analyze</span>
+                            <span>Upload</span>
                         </>
                     )}
                 </button>
-                <button className='bg-purple-500 px.4'onClick={handleMockUpload}>Run Mock Upload</button>
+
+                {/* Analysis Button */}
+                <button
+                    onClick={handleMockUpload}
+                    disabled={!projectId || uploadStatus === 'analyzing'}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 
+                        disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors duration-200
+                        flex items-center space-x-2"
+                >
+                    {uploadStatus === 'analyzing' ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Analyzing...</span>
+                        </>
+                    ) : (
+                        <>
+                            <PlayCircle className="w-4 h-4" />
+                            <span>Run Analysis</span>
+                        </>
+                    )}
+                </button>
+
             </div>
+
 
             {/* Debug Info (remove in production) */}
             <div className="mt-4 p-3 bg-slate-800/50 rounded text-xs text-slate-400">

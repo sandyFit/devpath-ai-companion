@@ -245,18 +245,18 @@ class ProjectRepository {
 
       this.logger.log(`[ProjectRepository] Updating project status: ${projectId} to ${status}`);
       
-      // Use stored procedure for status update with validation
+      // Replace stored procedure call with direct SQL update
       const result = await snowflakeService.executeQuery(
-        'CALL SP_UPDATE_PROJECT_STATUS(?, ?)',
-        [projectId, status],
+        `UPDATE ${this.tableName} SET STATUS = ?, UPDATED_AT = CURRENT_TIMESTAMP() WHERE PROJECT_ID = ?`,
+        [status, projectId],
         { timeout: 30000 }
       );
-      
+
       // Get updated project data
       const updatedProject = await this.getProjectById(projectId);
-      
+
       this.logger.log(`[ProjectRepository] Project status updated successfully: ${projectId}`);
-      
+
       return {
         success: true,
         data: {

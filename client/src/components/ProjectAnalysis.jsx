@@ -166,12 +166,11 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
             {/* Code Analysis Tab */}
             {activeTab === 'analysis' && (
                 <AnalysisTab
-                    data={data}
                     analyses={analyses}
                     expandedItems={expandedItems}
                     toggleExpanded={toggleExpanded}
                     runMockAnalysis={runMockAnalysis}
-                    loading={loadingStates.analyses}
+                    loading={loadingState.analyses}
                 />
             )}
                                

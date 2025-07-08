@@ -1,7 +1,14 @@
 const snowflakeService = require('../services/snowflakeService');
-const { ANALYSIS_TYPES } = require('../services/analysisService');
-console.log('ANALYSIS_TYPES:', ANALYSIS_TYPES);
 const { v4: uuidv4 } = require('uuid');
+
+// Define ANALYSIS_TYPES locally to avoid circular dependency
+const ANALYSIS_TYPES = {
+  CODE_QUALITY: 'code_quality',
+  COMPLEXITY: 'complexity',
+  SECURITY: 'security',
+  BEST_PRACTICES: 'best_practices',
+  LEARNING_GAPS: 'learning_gaps'
+};
 
 console.log('>>> USING ANALYSIS REPO FILE: analysisRepository.js');
 
@@ -31,51 +38,53 @@ class AnalysisRepository {
   async createAnalysis(analysisData) {
     try {
       console.log('[REPO DEBUG] Creating analysis with data:', analysisData);
-      
-      const { 
-        fileId, 
-        issuesFound = [], 
-        suggestions = [], 
-        qualityScore, 
-        complexityScore, 
+
+      const {
+        fileId,
+        issuesFound = [],
+        suggestions = [],
+        qualityScore,
+        complexityScore,
         securityScore,
-        strengths = [], 
+        strengths = [],
         learningRecommendations = [],
         projectId,
         analysisType
       } = analysisData;
-  
+
       // Validate required fields
       if (!fileId) throw new Error('File ID is required');
       if (!projectId) throw new Error('Project ID is required');
       if (!analysisType) throw new Error('Analysis type is required');
-  
-      // ✅ FIXED VALIDATION
-      const normalizedAnalysisType = (analysisType || '').toLowerCase();
+
+      // ✅ IMPROVED VALIDATION - More flexible for batch analysis
+      let normalizedAnalysisType = (analysisType || 'code_quality').toLowerCase();
       const normalizedAnalysisTypes = Object.values(ANALYSIS_TYPES).map(v => v.toLowerCase());
-  
+
       console.log('>>> Raw analysisType:', analysisType);
       console.log('>>> Normalized:', normalizedAnalysisType);
       console.log('>>> Valid Types:', normalizedAnalysisTypes);
-  
+
+      // If it's not a valid type, default to code_quality instead of throwing error
       if (!normalizedAnalysisTypes.includes(normalizedAnalysisType)) {
-        throw new Error(`Invalid analysis type: ${analysisType}. Valid types are: ${normalizedAnalysisTypes.join(', ')}`);
+        console.warn(`[REPO] Invalid analysis type: ${analysisType}. Defaulting to 'code_quality'`);
+        normalizedAnalysisType = 'code_quality';
       }
-  
+
       // Validate scores
       const validateScore = (score, name) => {
         if (typeof score !== 'number' || score < 1 || score > 10) {
           throw new Error(`${name} must be a number between 1 and 10`);
         }
       };
-      
+
       validateScore(qualityScore, 'qualityScore');
       validateScore(complexityScore, 'complexityScore');
       validateScore(securityScore, 'securityScore');
-  
+
       const analysisId = uuidv4();
       console.log(`[REPO DEBUG] Generated analysis ID: ${analysisId}`);
-  
+
       const insertQuery = `
         INSERT INTO ${this.tableName} (
           ANALYSIS_ID, FILE_ID, PROJECT_ID, ANALYSIS_TYPE,
@@ -85,7 +94,7 @@ class AnalysisRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP())
       `;
 
-  
+
       const insertParams = [
         analysisId,
         fileId,
@@ -99,15 +108,15 @@ class AnalysisRepository {
         JSON.stringify(strengths),
         JSON.stringify(learningRecommendations)
       ];
-  
+
       console.log('[REPO DEBUG] Executing query with params:', insertParams);
       const result = await snowflakeService.executeQuery(insertQuery, insertParams, { timeout: 30000 });
       console.log('[REPO DEBUG] Query result:', result);
-  
+
       if (!result || result.rowCount === 0) {
         throw new Error('Insert failed: No rows were affected');
       }
-  
+
       return {
         success: true,
         data: {
@@ -125,13 +134,13 @@ class AnalysisRepository {
           createdAt: new Date().toISOString()
         }
       };
-  
+
     } catch (error) {
       console.error('[REPO ERROR] Error creating analysis:', error);
       throw new Error(`Failed to create analysis: ${error.message}`);
     }
   }
-  
+
 
   /**
    * Get all analyses for a project
@@ -172,7 +181,7 @@ class AnalysisRepository {
       }
 
       this.logger.log(`[AnalysisRepository] Retrieving analyses for project: ${projectId}`);
-      
+
       let query = `
         SELECT 
           a.ANALYSIS_ID,
@@ -190,55 +199,55 @@ class AnalysisRepository {
         FROM ${this.tableName} a
         JOIN CODE_FILES cf ON a.FILE_ID = cf.FILE_ID
         WHERE cf.PROJECT_ID = ?`;
-      
+
       const binds = [projectId];
-      
+
       // Add score filters if provided
       if (minQualityScore !== undefined) {
         query += ' AND a.QUALITY_SCORE >= ?';
         binds.push(minQualityScore);
       }
-      
+
       if (maxComplexityScore !== undefined) {
         query += ' AND a.COMPLEXITY_SCORE <= ?';
         binds.push(maxComplexityScore);
       }
-      
+
       // Add ordering
       query += ` ORDER BY a.${orderBy} ${orderDirection.toUpperCase()}`;
-      
+
       // Add pagination
       query += ' LIMIT ? OFFSET ?';
       binds.push(limit, offset);
-      
+
       const result = await snowflakeService.executeQuery(query, binds, { timeout: 30000 });
-      
+
       // Get total count for pagination metadata
       let countQuery = `
         SELECT COUNT(*) as TOTAL_COUNT 
         FROM ${this.tableName} a
         JOIN CODE_FILES cf ON a.FILE_ID = cf.FILE_ID
         WHERE cf.PROJECT_ID = ?`;
-      
+
       const countBinds = [projectId];
-      
+
       if (minQualityScore !== undefined) {
         countQuery += ' AND a.QUALITY_SCORE >= ?';
         countBinds.push(minQualityScore);
       }
-      
+
       if (maxComplexityScore !== undefined) {
         countQuery += ' AND a.COMPLEXITY_SCORE <= ?';
         countBinds.push(maxComplexityScore);
       }
-      
+
       const countResult = await snowflakeService.executeQuery(countQuery, countBinds, { timeout: 30000 });
       const totalCount = countResult.rows[0]?.TOTAL_COUNT || 0;
-      
+
       const analyses = result.rows.map(row => this.formatAnalysisDataWithFile(row));
-      
+
       this.logger.log(`[AnalysisRepository] Retrieved ${analyses.length} analyses for project: ${projectId}`);
-      
+
       return {
         success: true,
         data: analyses,
@@ -251,7 +260,7 @@ class AnalysisRepository {
           totalPages: Math.ceil(totalCount / limit)
         }
       };
-      
+
     } catch (error) {
       this.logger.error('[AnalysisRepository] Error retrieving analyses by project:', error);
       throw new Error(`Failed to retrieve analyses: ${error.message}`);
@@ -292,64 +301,64 @@ class AnalysisRepository {
       }
 
       this.logger.log(`[AnalysisRepository] Updating analysis: ${analysisId}`);
-      
+
       const updateFields = [];
       const binds = [];
-      
+
       // Build dynamic update query
       if (updates.issuesFound !== undefined) {
         updateFields.push('ISSUES_FOUND = PARSE_JSON(?)');
         binds.push(JSON.stringify(updates.issuesFound));
       }
-      
+
       if (updates.suggestions !== undefined) {
         updateFields.push('SUGGESTIONS = PARSE_JSON(?)');
         binds.push(JSON.stringify(updates.suggestions));
       }
-      
+
       if (updates.qualityScore !== undefined) {
         updateFields.push('QUALITY_SCORE = ?');
         binds.push(updates.qualityScore);
       }
-      
+
       if (updates.complexityScore !== undefined) {
         updateFields.push('COMPLEXITY_SCORE = ?');
         binds.push(updates.complexityScore);
       }
-      
+
       if (updates.securityScore !== undefined) {
         updateFields.push('SECURITY_SCORE = ?');
         binds.push(updates.securityScore);
       }
-      
+
       if (updates.strengths !== undefined) {
         updateFields.push('STRENGTHS = PARSE_JSON(?)');
         binds.push(JSON.stringify(updates.strengths));
       }
-      
+
       if (updates.learningRecommendations !== undefined) {
         updateFields.push('LEARNING_RECOMMENDATIONS = PARSE_JSON(?)');
         binds.push(JSON.stringify(updates.learningRecommendations));
       }
-      
+
       // Add updated timestamp
       updateFields.push('UPDATED_AT = CURRENT_TIMESTAMP()');
-      
+
       // Add analysis ID for WHERE clause
       binds.push(analysisId);
-      
+
       const query = `
         UPDATE ${this.tableName} 
         SET ${updateFields.join(', ')}
         WHERE ANALYSIS_ID = ?`;
-      
+
       const result = await snowflakeService.executeQuery(query, binds, { timeout: 30000 });
-      
+
       // Get updated analysis data
       const updatedAnalysis = await this.getAnalysisById(analysisId);
-      
+
       this.logger.log(`[AnalysisRepository] Analysis updated successfully: ${analysisId}`);
-      
+
       return {
         success: true,
         data: {
@@ -360,7 +369,7 @@ class AnalysisRepository {
         },
         queryResult: result
       };
-      
+
     } catch (error) {
       this.logger.error('[AnalysisRepository] Error updating analysis:', error);
       throw new Error(`Failed to update analysis: ${error.message}`);
@@ -379,7 +388,7 @@ class AnalysisRepository {
       }
 
       this.logger.log(`[AnalysisRepository] Retrieving analytics summary for project: ${projectId}`);
-      
+
       const query = `
         SELECT 
           COUNT(DISTINCT a.ANALYSIS_ID) as TOTAL_ANALYSES,
@@ -399,9 +408,9 @@ class AnalysisRepository {
         FROM ${this.tableName} a
         JOIN CODE_FILES cf ON a.FILE_ID = cf.FILE_ID
         WHERE cf.PROJECT_ID = ?`;
-      
+
       const result = await snowflakeService.executeQuery(query, [projectId], { timeout: 30000 });
-      
+
       if (result.rows.length === 0 || result.rows[0].TOTAL_ANALYSES === 0) {
         return {
           success: true,
@@ -413,7 +422,7 @@ class AnalysisRepository {
           }
         };
       }
-      
+
       // Get language distribution
       const languageQuery = `
         SELECT 
@@ -427,9 +436,9 @@ class AnalysisRepository {
         WHERE cf.PROJECT_ID = ?
         GROUP BY cf.LANGUAGE
         ORDER BY ANALYSIS_COUNT DESC`;
-      
+
       const languageResult = await snowflakeService.executeQuery(languageQuery, [projectId], { timeout: 30000 });
-      
+
       // Get most common issues
       const issuesQuery = `
         SELECT 
@@ -443,20 +452,20 @@ class AnalysisRepository {
         GROUP BY issue.value:type::STRING, issue.value:severity::STRING
         ORDER BY OCCURRENCE_COUNT DESC
         LIMIT 10`;
-      
+
       const issuesResult = await snowflakeService.executeQuery(issuesQuery, [projectId], { timeout: 30000 });
-      
+
       const summary = this.formatProjectAnalyticsSummary(result.rows[0]);
       summary.languageDistribution = languageResult.rows.map(row => this.formatLanguageDistribution(row));
       summary.commonIssues = issuesResult.rows.map(row => this.formatCommonIssue(row));
-      
+
       this.logger.log(`[AnalysisRepository] Analytics summary retrieved for project: ${projectId}`);
-      
+
       return {
         success: true,
         data: summary
       };
-      
+
     } catch (error) {
       this.logger.error('[AnalysisRepository] Error retrieving project analytics summary:', error);
       throw new Error(`Failed to retrieve project analytics: ${error.message}`);
@@ -477,7 +486,7 @@ class AnalysisRepository {
       }
 
       const { timeframe = '30d' } = options;
-      
+
       // Convert timeframe to days
       const timeframeDays = {
         '7d': 7,
@@ -485,14 +494,14 @@ class AnalysisRepository {
         '90d': 90,
         '1y': 365
       };
-      
+
       const days = timeframeDays[timeframe];
       if (!days) {
         throw new Error('Invalid timeframe. Must be one of: 7d, 30d, 90d, 1y');
       }
 
       this.logger.log(`[AnalysisRepository] Retrieving user progress analytics for: ${userId} (${timeframe})`);
-      
+
       // Overall user statistics
       const overallQuery = `
         SELECT 
@@ -509,9 +518,9 @@ class AnalysisRepository {
         JOIN ${this.tableName} a ON cf.FILE_ID = a.FILE_ID
         WHERE p.USER_ID = ?
         AND a.CREATED_AT >= DATEADD(day, -?, CURRENT_TIMESTAMP())`;
-      
+
       const overallResult = await snowflakeService.executeQuery(overallQuery, [userId, days], { timeout: 30000 });
-      
+
       // Progress over time (weekly breakdown)
       const progressQuery = `
         SELECT 
@@ -527,9 +536,9 @@ class AnalysisRepository {
         AND a.CREATED_AT >= DATEADD(day, -?, CURRENT_TIMESTAMP())
         GROUP BY DATE_TRUNC('week', a.CREATED_AT)
         ORDER BY WEEK_START`;
-      
+
       const progressResult = await snowflakeService.executeQuery(progressQuery, [userId, days], { timeout: 30000 });
-      
+
       // Language expertise
       const languageQuery = `
         SELECT 
@@ -546,9 +555,9 @@ class AnalysisRepository {
         AND a.CREATED_AT >= DATEADD(day, -?, CURRENT_TIMESTAMP())
         GROUP BY cf.LANGUAGE
         ORDER BY ANALYSIS_COUNT DESC`;
-      
+
       const languageResult = await snowflakeService.executeQuery(languageQuery, [userId, days], { timeout: 30000 });
-      
+
       if (overallResult.rows.length === 0 || overallResult.rows[0].TOTAL_ANALYSES === 0) {
         return {
           success: true,
@@ -560,7 +569,7 @@ class AnalysisRepository {
           }
         };
       }
-      
+
       const analytics = {
         userId,
         timeframe,
@@ -568,14 +577,14 @@ class AnalysisRepository {
         progressOverTime: progressResult.rows.map(row => this.formatProgressData(row)),
         languageExpertise: languageResult.rows.map(row => this.formatLanguageExpertise(row))
       };
-      
+
       this.logger.log(`[AnalysisRepository] User progress analytics retrieved for: ${userId}`);
-      
+
       return {
         success: true,
         data: analytics
       };
-      
+
     } catch (error) {
       this.logger.error('[AnalysisRepository] Error retrieving user progress analytics:', error);
       throw new Error(`Failed to retrieve user analytics: ${error.message}`);
@@ -610,16 +619,16 @@ class AnalysisRepository {
         [analysisId],
         { timeout: 30000 }
       );
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       return {
         success: true,
         data: this.formatAnalysisData(result.rows[0])
       };
-      
+
     } catch (error) {
       this.logger.error('[AnalysisRepository] Error retrieving analysis by ID:', error);
       throw new Error(`Failed to retrieve analysis: ${error.message}`);
@@ -633,7 +642,7 @@ class AnalysisRepository {
     `;
     await snowflakeService.executeQuery(query, [fileId, projectId]);
   }
-  
+
 
   /**
  * DEBUG: Get recent analyses directly from the ANALYSES table
@@ -644,7 +653,7 @@ class AnalysisRepository {
     const result = await snowflakeService.executeQuery(query);
     return result.rows;
   }
-  
+
 
   // Private formatting methods
 
@@ -713,7 +722,7 @@ class AnalysisRepository {
       }
 
       this.logger.log(`[AnalysisRepository] Retrieving analytics summary for project: ${projectId}`);
-      
+
       const query = `
         SELECT 
           COUNT(DISTINCT a.ANALYSIS_ID) as TOTAL_ANALYSES,
@@ -733,9 +742,9 @@ class AnalysisRepository {
         FROM ${this.tableName} a
         JOIN CODE_FILES cf ON a.FILE_ID = cf.FILE_ID
         WHERE cf.PROJECT_ID = ?`;
-      
+
       const result = await snowflakeService.executeQuery(query, [projectId], { timeout: 30000 });
-      
+
       if (result.rows.length === 0 || result.rows[0].TOTAL_ANALYSES === 0) {
         return {
           success: true,
@@ -747,7 +756,7 @@ class AnalysisRepository {
           }
         };
       }
-      
+
       // Get language distribution
       const languageQuery = `
         SELECT 
@@ -761,9 +770,9 @@ class AnalysisRepository {
         WHERE cf.PROJECT_ID = ?
         GROUP BY cf.LANGUAGE
         ORDER BY ANALYSIS_COUNT DESC`;
-      
+
       const languageResult = await snowflakeService.executeQuery(languageQuery, [projectId], { timeout: 30000 });
-      
+
       // Get most common issues - Fixed query to handle JSON parsing properly
       const issuesQuery = `
         SELECT 
@@ -794,7 +803,7 @@ class AnalysisRepository {
         GROUP BY issue_type, issue_severity
         ORDER BY OCCURRENCE_COUNT DESC
         LIMIT 10`;
-      
+
       let issuesResult;
       try {
         issuesResult = await snowflakeService.executeQuery(issuesQuery, [projectId], { timeout: 30000 });
@@ -803,26 +812,26 @@ class AnalysisRepository {
         // Return empty array if issues query fails
         issuesResult = { rows: [] };
       }
-      
+
       const summary = this.formatProjectAnalyticsSummary(result.rows[0]);
       summary.projectId = projectId;
       summary.languageDistribution = languageResult.rows.map(row => this.formatLanguageDistribution(row));
       summary.commonIssues = issuesResult.rows.map(row => this.formatCommonIssue(row));
-      
+
       this.logger.log(`[AnalysisRepository] Analytics summary retrieved for project: ${projectId}`);
-      
+
       return {
         success: true,
         data: summary
       };
-      
+
     } catch (error) {
       this.logger.error('[AnalysisRepository] Error retrieving project analytics summary:', error);
       throw new Error(`Failed to retrieve project analytics: ${error.message}`);
     }
   }
 
-  
+
   /**
    * Format language distribution data
    * @private
