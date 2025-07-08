@@ -9,7 +9,7 @@ import UserDashboard from '../components/UserDashboard';
 import CodeUpload from '../components/CodeUpload';
 import AgentStatusCard from '../components/AgentStatusCard';
 import AnalysisSummary from '../components/AnalysisSummary';
-import LearningPathCard from '../components/LearningPathCard';
+import LearningPathCard from '../components/LearningPathsUI/LearningPathsTab';
 import FileAnalysisList from '../components/FileAnalysisList';
 import ProjectAnalysis from '../components/ProjectAnalysis';
 
@@ -164,9 +164,9 @@ const Dashboard = () => {
 
                     {/* Project Analysis – full width */}
                     {projectInsights?.length > 0 && (
-                        <div className="mb-6">
-                            
-                            <ProjectAnalysis data={projectInsights} />
+                        <div className="mb-6">                      
+                            <ProjectAnalysis projectId="mock-project-id" />
+
                         </div>
                     )}
 

@@ -26,7 +26,6 @@ async function getLearningPaths(req, res) {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    // ✅ Return mock response if mock flag is set
     if (isMock) {
       console.log(`[Mock Mode] Returning mock learning paths for user: ${userId}`);
 
@@ -34,34 +33,45 @@ async function getLearningPaths(req, res) {
         success: true,
         data: [
           {
-            id: 'lp1',
-            topic: 'Understanding Code Complexity',
-            type: 'video',
-            estimatedTime: '20 mins',
-            source: 'YouTube',
-            url: 'https://www.youtube.com/watch?v=complexity-basics'
-          },
-          {
-            id: 'lp2',
-            topic: 'Clean Code Practices',
-            type: 'article',
-            estimatedTime: '10 mins',
-            source: 'Medium',
-            url: 'https://medium.com/clean-code-principles'
-          },
-          {
-            id: 'lp3',
-            topic: 'Secure Coding in JavaScript',
-            type: 'course',
-            estimatedTime: '45 mins',
-            source: 'OWASP',
-            url: 'https://owasp.org/www-project-top-ten/'
+            path_id: 'lp_001',
+            user_id: userId,
+            project_id: 'proj_abc123',
+            recommended_topics: ['Secure Coding', 'Code Readability', 'Refactoring'],
+            difficulty_level: 'Intermediate',
+            estimated_hours: 5,
+            progress_percentage: 0,
+            status: 'NOT_STARTED',
+            learning_objectives: [
+              'Understand common security flaws in web apps',
+              'Improve code structure readability',
+              'Apply refactoring patterns'
+            ],
+            prerequisites: ['Basic JavaScript', 'Git'],
+            resources: [
+              {
+                type: 'video',
+                title: 'Secure JS Practices',
+                url: 'https://example.com/secure-js-video'
+              },
+              {
+                type: 'article',
+                title: 'Refactor Like a Pro',
+                url: 'https://dev.to/refactor-guide'
+              },
+              {
+                type: 'course',
+                title: 'Code Readability Masterclass',
+                url: 'https://courses.dev/readability'
+              }
+            ],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }
         ]
       });
     }
 
-    // 🧠 Real backend response
+    // Fetch real data
     const learningPaths = await learningPathService.getLearningPaths(userId);
     res.json({
       success: true,
@@ -77,7 +87,8 @@ async function getLearningPaths(req, res) {
   }
 }
 
-}
+
+
 
 module.exports = {
   generateLearningPath,
