@@ -155,14 +155,22 @@ const api = {
   },
 
   getProjectAnalysis: async (projectId) => {
-    const response = await apiClient.get(`/analysis/${projectId}`);
+    const response = await apiClient.get(`/project/${projectId}/analyses`);
     return response.data;
   },
 
-    // NEW: Store mock Groq batch analysis for testing UI
+  // NEW: Store mock Groq batch analysis for testing UI
   mockGroqBatchAnalysis: async (projectId) => {
     const response = await apiClient.post('/analyze/store', {
       mock: true,
+      projectId,
+    });
+    return response.data;
+  },
+
+  // NEW: Run actual batch analysis
+  runBatchAnalysis: async (projectId) => {
+    const response = await apiClient.post('/analyze/batch', {
       projectId,
     });
     return response.data;

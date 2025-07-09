@@ -129,16 +129,18 @@ const analyzeExtractedFiles = async (req, res) => {
     // Store successful analyses in Snowflake
     const storedAnalyses = [];
     let successfulStores = 0;
+    const dbErrors = [];
     
     for (const result of batchResult.results) {
       if (!result.error && result.analysis) {
         try {
+          // Ensure we have all required fields
           const analysisData = {
             fileId: result.fileId || uuidv4(),
             projectId: projectId || null,
             analysisType: types.length > 0 ? types[0] : 'code_quality', // Use first analysis type
-            filename: result.filename,
-            language: result.language,
+            filename: result.filename || 'unknown_file', // Fix: Ensure filename is always provided
+            language: result.language || 'unknown',
             issuesFound: result.analysis.issues || [],
             suggestions: result.analysis.suggestions || [],
             qualityScore: result.analysis.qualityScore || 5,
@@ -149,24 +151,51 @@ const analyzeExtractedFiles = async (req, res) => {
           };
 
           console.log('[BATCH DEBUG] Saving analysis for:', result.filename);
-          console.log('[BATCH DEBUG] Analysis data payload:', analysisData);
+          console.log('[BATCH DEBUG] Analysis data payload:', JSON.stringify(analysisData, null, 2));
+
+          // Validate required fields before attempting to save
+          if (!analysisData.projectId) {
+            throw new Error('Project ID is required for database storage');
+          }
 
           const storedAnalysis = await analysisRepository.createAnalysis(analysisData);
 
-          console.log('[BATCH DEBUG] Saved analysis result:', storedAnalysis);
+          console.log('[BATCH DEBUG] Saved analysis result:', JSON.stringify(storedAnalysis, null, 2));
 
-          storedAnalyses.push({
-            filename: result.filename,
-            analysisId: storedAnalysis.data.analysisId,
-            originalAnalysisId: result.analysisId
-          });
-          successfulStores++;
+          if (storedAnalysis && storedAnalysis.success && storedAnalysis.data) {
+            storedAnalyses.push({
+              filename: result.filename,
+              analysisId: storedAnalysis.data.analysisId,
+              originalAnalysisId: result.analysisId
+            });
+            successfulStores++;
+            console.log(`[BATCH SUCCESS] Successfully stored analysis for ${result.filename} with ID: ${storedAnalysis.data.analysisId}`);
+          } else {
+            throw new Error('Database operation returned unexpected result structure');
+          }
 
         } catch (dbError) {
-          console.error(`[AnalysisController] Could not store analysis for ${result.filename}:`, dbError.message);
+          console.error(`[AnalysisController] CRITICAL ERROR - Could not store analysis for ${result.filename}:`, dbError.message);
           console.error('[AnalysisController] Full error details:', dbError);
+          console.error('[AnalysisController] Error stack:', dbError.stack);
+          
+          dbErrors.push({
+            filename: result.filename,
+            error: dbError.message,
+            stack: dbError.stack
+          });
         }
+      } else {
+        console.warn(`[BATCH DEBUG] Skipping result for ${result.filename || 'unknown'}: ${result.error ? 'has error' : 'no analysis data'}`);
       }
+    }
+    
+    // Log summary of database operations
+    console.log(`[BATCH SUMMARY] Total files processed: ${batchResult.results.length}`);
+    console.log(`[BATCH SUMMARY] Successfully stored in DB: ${successfulStores}`);
+    console.log(`[BATCH SUMMARY] Database errors: ${dbErrors.length}`);
+    if (dbErrors.length > 0) {
+      console.error('[BATCH SUMMARY] Database errors details:', JSON.stringify(dbErrors, null, 2));
     }
     
     // Update project status to completed if projectId provided and all analyses succeeded
@@ -364,6 +393,9 @@ const getProjectAnalyses = async (req, res) => {
     const { limit, offset, minQualityScore, maxComplexityScore } = req.query;
     
     console.log(`[AnalysisController] Retrieving analyses for project: ${projectId}`);
+    console.error(`[CRITICAL CONTROLLER DEBUG] About to call analysisRepository.getAnalysesByProjectId`);
+    console.error(`[CRITICAL CONTROLLER DEBUG] Repository object:`, typeof analysisRepository);
+    console.error(`[CRITICAL CONTROLLER DEBUG] getAnalysesByProjectId method:`, typeof analysisRepository.getAnalysesByProjectId);
     
     if (!projectId) {
       return res.status(400).json({ 
@@ -377,7 +409,9 @@ const getProjectAnalyses = async (req, res) => {
     if (minQualityScore) options.minQualityScore = parseFloat(minQualityScore);
     if (maxComplexityScore) options.maxComplexityScore = parseFloat(maxComplexityScore);
     
+    console.error(`[CRITICAL CONTROLLER DEBUG] Calling getAnalysesByProjectId with:`, projectId, options);
     const result = await analysisRepository.getAnalysesByProjectId(projectId, options);
+    console.error(`[CRITICAL CONTROLLER DEBUG] Result received:`, result);
     
     res.json({
       success: true,

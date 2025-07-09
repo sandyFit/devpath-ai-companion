@@ -12,7 +12,7 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const fileInputRef = useRef(null);
 
-    const handleMockUpload = async () => {
+    const handleBatchAnalysis = async () => {
         if (!projectId) {
             setUploadError('No project uploaded yet');
             return;
@@ -23,20 +23,20 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
             setUploadStatus('analyzing');
             setUploadError('');
 
-            console.log('Triggering analysis...');
-            await api.mockGroqBatchAnalysis(projectId);
+            console.log('Starting batch analysis for project:', projectId);
+            const result = await api.runBatchAnalysis(projectId);
 
-            console.log('Analysis started. You may want to poll or refresh data here.');
+            console.log('Batch analysis completed:', result);
             setUploadStatus('analyzed');
 
             if (onResult) {
-                onResult({ projectId }); // trigger reload from parent
+                onResult({ projectId, analysisResult: result }); // trigger reload from parent
             }
 
         } catch (error) {
             console.error('Analysis failed:', error);
             setUploadStatus('error');
-            setUploadError('Analysis failed. Please try again.');
+            setUploadError(`Analysis failed: ${error.message || 'Please try again.'}`);
         } finally {
             setIsAnalyzing(false);
         }
@@ -73,7 +73,19 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
         setUploadStatus('idle');
         setUploadProgress(0);
         
-        // Validate file
+        // Validate file exists
+        if (!file) {
+            setUploadError('No file selected');
+            return;
+        }
+
+        // Check if file is empty
+        if (file.size === 0) {
+            setUploadError('Selected file is empty. Please choose a valid ZIP file with content.');
+            return;
+        }
+        
+        // Validate file type
         if (!file.type.includes('zip') && !file.name.endsWith('.zip')) {
             setUploadError('Please select a valid ZIP file');
             return;
@@ -276,7 +288,7 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
 
                 {/* Analysis Button */}
                 <button
-                    onClick={handleMockUpload}
+                    onClick={handleBatchAnalysis}
                     disabled={!projectId || uploadStatus === 'analyzing'}
                     className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 
                         disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors duration-200
@@ -299,11 +311,11 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
 
 
             {/* Debug Info (remove in production) */}
-            <div className="mt-4 p-3 bg-slate-800/50 rounded text-xs text-slate-400">
+            {/* <div className="mt-4 p-3 bg-slate-800/50 rounded text-xs text-slate-400">
                 <p>Debug: Server URL: http://localhost:3800</p>
                 <p>Status: {uploadStatus}</p>
                 {selectedFile && <p>File: {selectedFile.name}</p>}
-            </div>
+            </div> */}
         </div>
     );
 };

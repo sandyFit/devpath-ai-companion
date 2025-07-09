@@ -18,6 +18,7 @@ import {  AlertTriangle, PlayCircle, RefreshCw} from 'lucide-react';
 const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
     const projectId = propProjectId;
     const [activeTab, setActiveTab] = useState('summary');
+    const [expandedItems, setExpandedItems] = useState(new Set());
 
     const [loadingState, setLoadingState] = useState({ project: false, /* ... */ });
     const [error, setError] = useState(null);
@@ -26,27 +27,32 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
     const handleApiError = useApiError(setError);
     const {
     projectData,
-    fetchProjectData,
+    fetchProjectData: fetchProjectDataRaw,
     isCacheValid
     } = useProjectData(projectId, setLoadingState);
 
     const {
         analyses,
-        fetchAnalyses
+        fetchAnalyses: fetchAnalysesRaw
       } = useAnalyses(projectId, setLoadingState, onDataUpdate, isCacheValid);
-
 
     const {
     analyticsSummary,
-    fetchAnalyticsSummary
+    fetchAnalyticsSummary: fetchAnalyticsSummaryRaw
     } = useAnalyticsSummary(projectId, setLoadingState, isCacheValid);
     
     const summary = analyticsSummary; // for backward compatibility
 
     const {
     learningPaths,
-    fetchLearningPaths
+    fetchLearningPaths: fetchLearningPathsRaw
     } = useLearningPaths(projectId, setLoadingState);
+
+    // Memoize fetch functions to avoid infinite loops in useEffect
+    const fetchProjectData = React.useCallback(() => fetchProjectDataRaw(), [fetchProjectDataRaw]);
+    const fetchAnalyses = React.useCallback(() => fetchAnalysesRaw(), [fetchAnalysesRaw]);
+    const fetchAnalyticsSummary = React.useCallback(() => fetchAnalyticsSummaryRaw(), [fetchAnalyticsSummaryRaw]);
+    const fetchLearningPaths = React.useCallback(() => fetchLearningPathsRaw(), [fetchLearningPathsRaw]);
 
 
     const { runMockAnalysis } = useMockAnalysis({
@@ -66,6 +72,17 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
     setError,
     setLastFetch
     });
+
+    // Auto-fetch data when component mounts or projectId changes
+    useEffect(() => {
+        if (projectId) {
+            console.log('ProjectAnalysis: Auto-fetching data for projectId:', projectId);
+            fetchAnalysesRaw(true); // Force fetch to get fresh data
+            fetchAnalyticsSummaryRaw(true);
+            fetchProjectDataRaw(true);
+            fetchLearningPathsRaw(true);
+        }
+    }, [projectId]); // Remove function dependencies to prevent infinite loops
 
     const computedStats = useMemo(() => {
         if (!analyticsSummary) return null;
@@ -110,6 +127,7 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
         return <ErrorDisplay error={error} onRetry={refreshData} />;
     }
 
+    
     return (
         <div className="space-y-6">
             {/* Header with refresh button */}

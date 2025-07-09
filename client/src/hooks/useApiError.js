@@ -30,7 +30,9 @@ export default function useApiError(setError) {
         userMessage = `Failed to load ${context}: ${errorMessage}`;
     }
 
-    setError(userMessage);
+    if (setError && typeof setError === 'function') {
+      setError(userMessage);
+    }
     return userMessage;
   }, [setError]);
 }

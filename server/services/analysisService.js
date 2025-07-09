@@ -96,24 +96,7 @@ class AnalysisService {
 
       this.analysisResults.set(analysisId, fullResult);
 
-      // ✅ Save to DB
-      if (fileData.projectId) {
-        await analysisRepository.createAnalysis({
-          analysisId,
-          fileId: result.fileId || fileData.fileId || uuidv4(),
-          projectId: fileData.projectId,
-          analysisType: fileData.analysisTypes?.[0] || 'code_quality',
-          qualityScore: analysis.qualityScore || 5,
-          complexityScore: analysis.complexityScore || 5,
-          securityScore: analysis.securityScore || 5,
-          issuesFound: analysis.issues || [],
-          strengths: analysis.strengths || [],
-          suggestions: analysis.suggestions || [],
-          learningRecommendations: analysis.learningRecommendations || []
-        });
-        console.log(`[AnalysisService] Stored analysis ${analysisId} in DB`);
-      }
-
+      // Note: Database saving is handled by the controller to avoid duplicate saves
       return {
         analysisId,
         ...result
@@ -293,8 +276,13 @@ class AnalysisService {
       throw new Error('Filename is required');
     }
 
-    if (!content || typeof content !== 'string') {
+    if (content === undefined || content === null || typeof content !== 'string') {
       throw new Error('File content is required and must be a string');
+    }
+
+    // Allow empty files but log a warning
+    if (content.trim() === '') {
+      console.warn(`[AnalysisService] Warning: File ${filename} is empty or contains only whitespace`);
     }
 
     // Validate file size
