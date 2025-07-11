@@ -113,15 +113,24 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
             setUploadError('');
             setIsAnalyzing(true);
 
-            console.log('Testing server connection...');
+            console.log('=== STARTING UPLOAD PROCESS ===');
+            
+            // Test basic server connection
+            console.log('Step 1: Testing server connection...');
             await api.testConnection();
-            console.log('Server connection successful');
+            console.log('✅ Server connection successful');
 
-            console.log('Starting upload...');
+            // Test upload endpoint specifically
+            console.log('Step 2: Testing upload endpoint...');
+            await api.testUploadEndpoint();
+            console.log('✅ Upload endpoint accessible');
+
+            // Proceed with actual upload
+            console.log('Step 3: Starting file upload...');
             const result = await api.uploadProject(selectedFile, userId);
             setProjectId(result.data?.projectId);
 
-            console.log('Upload completed:', result);
+            console.log('✅ Upload completed successfully:', result);
 
             setUploadStatus('success');
             setUploadProgress(100);
@@ -131,9 +140,21 @@ const CodeUpload = ({ onResult, setIsAnalyzing, setAnalysisData }) => {
             }
 
         } catch (error) {
-            console.error('Upload failed:', error);
+            console.error('❌ Upload failed:', error);
             setUploadStatus('error');
-            setUploadError(error.message || 'Upload failed. Please try again.');
+            
+            // Provide more specific error messages
+            let errorMessage = error.message || 'Upload failed. Please try again.';
+            
+            if (error.message.includes('ECONNREFUSED')) {
+                errorMessage = 'Cannot connect to server. Please ensure the server is running on port 3800.';
+            } else if (error.message.includes('ENOTFOUND')) {
+                errorMessage = 'Server not found. Please check if the server is accessible.';
+            } else if (error.message.includes('timeout')) {
+                errorMessage = 'Upload timeout. Please check your connection and try again.';
+            }
+            
+            setUploadError(errorMessage);
         } finally {
             setIsAnalyzing(false);
         }

@@ -80,7 +80,24 @@ const validateBatchAnalysisRequest = (req, res, next) => {
   try {
     console.log('[AnalysisValidation] Validating batch analysis request');
     
-    const { analysisTypes } = req.body;
+    const { analysisTypes, projectId } = req.body;
+    
+    // Validate projectId is required for batch analysis
+    if (!projectId || typeof projectId !== 'string' || projectId.trim() === '') {
+      return res.status(400).json({
+        error: 'Project ID required',
+        details: 'Project ID is required for batch analysis to ensure file isolation'
+      });
+    }
+    
+    // Basic UUID format validation for projectId
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(projectId)) {
+      return res.status(400).json({
+        error: 'Invalid project ID format',
+        details: 'Project ID must be a valid UUID'
+      });
+    }
     
     // Validate analysis types if provided
     if (analysisTypes) {

@@ -20,11 +20,16 @@ app.use(cors({
   origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+// Enhanced debugging middleware
 app.use((req, res, next) => {
-    console.log(`[ROUTING DEBUG] ${req.method} ${req.originalUrl}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+    console.log(`[HEADERS] ${JSON.stringify(req.headers, null, 2)}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+        console.log(`[BODY] ${JSON.stringify(req.body, null, 2)}`);
+    }
     next();
 });
 
@@ -62,9 +67,33 @@ app.get('/api/health/database', async (req, res) => {
   }
 });
 
-// Basic health check
+// Enhanced health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  console.log('[HEALTH CHECK] Basic health check requested');
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    server: 'Analysis API Server',
+    port: process.env.PORT || 3800,
+    endpoints: {
+      upload: '/api/upload',
+      health: '/api/health',
+      database: '/api/health/database'
+    }
+  });
+});
+
+// Test upload endpoint availability
+app.get('/api/upload/test', (req, res) => {
+  console.log('[UPLOAD TEST] Upload endpoint test requested');
+  res.json({
+    status: 'OK',
+    message: 'Upload endpoint is accessible',
+    method: 'POST',
+    endpoint: '/api/upload',
+    expectedContentType: 'multipart/form-data',
+    maxFileSize: '50MB'
+  });
 });
 
 // 404 handler

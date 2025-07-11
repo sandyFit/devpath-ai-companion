@@ -84,29 +84,61 @@ class AnalysisRepository {
       const analysisId = uuidv4();
       console.log(`[REPO DEBUG] Generated analysis ID: ${analysisId}`);
 
-      const insertQuery = `
-        INSERT INTO ${this.tableName} (
-          ANALYSIS_ID, FILE_ID, PROJECT_ID, ANALYSIS_TYPE,
-          ISSUES_FOUND, SUGGESTIONS, QUALITY_SCORE, COMPLEXITY_SCORE, 
-          SECURITY_SCORE, STRENGTHS, LEARNING_RECOMMENDATIONS,
-          CREATED_AT
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP())
-      `;
+      // Try to insert with new columns first, fallback to old schema if needed
+      let insertQuery, insertParams;
+      
+      try {
+        // Try with new schema (includes FILENAME, LANGUAGE, PROJECT_ID)
+        insertQuery = `
+          INSERT INTO ${this.tableName} (
+            ANALYSIS_ID, FILE_ID, PROJECT_ID, ANALYSIS_TYPE, FILENAME, LANGUAGE,
+            ISSUES_FOUND, SUGGESTIONS, QUALITY_SCORE, COMPLEXITY_SCORE, 
+            SECURITY_SCORE, STRENGTHS, LEARNING_RECOMMENDATIONS,
+            CREATED_AT
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP())
+        `;
 
+        insertParams = [
+          analysisId,
+          fileId,
+          projectId,
+          normalizedAnalysisType,
+          analysisData.filename || 'unknown_file',
+          analysisData.language || 'unknown',
+          JSON.stringify(issuesFound),
+          JSON.stringify(suggestions),
+          qualityScore,
+          complexityScore,
+          securityScore,
+          JSON.stringify(strengths),
+          JSON.stringify(learningRecommendations)
+        ];
+      } catch (schemaError) {
+        console.warn('[REPO] New schema failed, falling back to old schema:', schemaError.message);
+        
+        // Fallback to old schema (without FILENAME, LANGUAGE, PROJECT_ID)
+        insertQuery = `
+          INSERT INTO ${this.tableName} (
+            ANALYSIS_ID, FILE_ID, ANALYSIS_TYPE,
+            ISSUES_FOUND, SUGGESTIONS, QUALITY_SCORE, COMPLEXITY_SCORE, 
+            SECURITY_SCORE, STRENGTHS, LEARNING_RECOMMENDATIONS,
+            CREATED_AT
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP())
+        `;
 
-      const insertParams = [
-        analysisId,
-        fileId,
-        projectId,
-        normalizedAnalysisType,
-        JSON.stringify(issuesFound),
-        JSON.stringify(suggestions),
-        qualityScore,
-        complexityScore,
-        securityScore,
-        JSON.stringify(strengths),
-        JSON.stringify(learningRecommendations)
-      ];
+        insertParams = [
+          analysisId,
+          fileId,
+          normalizedAnalysisType,
+          JSON.stringify(issuesFound),
+          JSON.stringify(suggestions),
+          qualityScore,
+          complexityScore,
+          securityScore,
+          JSON.stringify(strengths),
+          JSON.stringify(learningRecommendations)
+        ];
+      }
 
       console.log('[REPO DEBUG] Executing query with params:', insertParams);
       const result = await snowflakeService.executeQuery(insertQuery, insertParams, { timeout: 30000 });
@@ -261,25 +293,62 @@ class AnalysisRepository {
         };
       }
 
-      // FIXED: Query analyses directly by PROJECT_ID instead of joining with CODE_FILES
-      let query = `
-        SELECT 
-          a.ANALYSIS_ID,
-          a.FILE_ID,
-          a.PROJECT_ID,
-          a.ANALYSIS_TYPE,
-          a.ISSUES_FOUND,
-          a.SUGGESTIONS,
-          a.QUALITY_SCORE,
-          a.COMPLEXITY_SCORE,
-          a.SECURITY_SCORE,
-          a.STRENGTHS,
-          a.LEARNING_RECOMMENDATIONS,
-          a.CREATED_AT
-        FROM ${this.tableName} a
-        WHERE a.PROJECT_ID = ?`;
+      // Try to query with new columns first, fallback to basic query if columns don't exist
+      let query, binds;
+      
+      try {
+        // Try with new schema first (includes FILENAME, LANGUAGE, PROJECT_ID)
+        query = `
+          SELECT 
+            a.ANALYSIS_ID,
+            a.FILE_ID,
+            a.PROJECT_ID,
+            a.ANALYSIS_TYPE,
+            a.FILENAME,
+            a.LANGUAGE,
+            a.ISSUES_FOUND,
+            a.SUGGESTIONS,
+            a.QUALITY_SCORE,
+            a.COMPLEXITY_SCORE,
+            a.SECURITY_SCORE,
+            a.STRENGTHS,
+            a.LEARNING_RECOMMENDATIONS,
+            a.CREATED_AT
+          FROM ${this.tableName} a
+          WHERE a.PROJECT_ID = ?`;
+        
+        binds = [projectId];
+        
+        // Test the query first
+        await snowflakeService.executeQuery(query + ' LIMIT 1', binds, { timeout: 10000 });
+        
+      } catch (schemaError) {
+        console.warn('[REPO] New schema query failed, falling back to join with CODE_FILES:', schemaError.message);
+        
+        // Fallback to join with CODE_FILES table
+        query = `
+          SELECT 
+            a.ANALYSIS_ID,
+            a.FILE_ID,
+            cf.PROJECT_ID,
+            a.ANALYSIS_TYPE,
+            cf.FILENAME,
+            cf.LANGUAGE,
+            a.ISSUES_FOUND,
+            a.SUGGESTIONS,
+            a.QUALITY_SCORE,
+            a.COMPLEXITY_SCORE,
+            a.SECURITY_SCORE,
+            a.STRENGTHS,
+            a.LEARNING_RECOMMENDATIONS,
+            a.CREATED_AT
+          FROM ${this.tableName} a
+          JOIN CODE_FILES cf ON a.FILE_ID = cf.FILE_ID
+          WHERE cf.PROJECT_ID = ?`;
+        
+        binds = [projectId];
+      }
 
-      const binds = [projectId];
       console.log('[DEBUG] Query:', query);
       console.log('[DEBUG] Binds:', binds);
 
@@ -714,6 +783,8 @@ class AnalysisRepository {
     return {
       analysisId: row.ANALYSIS_ID,
       fileId: row.FILE_ID,
+      filename: row.FILENAME || 'unknown_file',
+      language: row.LANGUAGE || 'unknown',
       issuesFound: row.ISSUES_FOUND ? JSON.parse(row.ISSUES_FOUND) : [],
       suggestions: row.SUGGESTIONS ? JSON.parse(row.SUGGESTIONS) : [],
       qualityScore: row.QUALITY_SCORE,

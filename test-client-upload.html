@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>Upload Test</h1>
+    <input type="file" id="fileInput" accept=".zip">
+    <button onclick="testUpload()">Test Upload</button>
+    <div id="result"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:3800/api';
+        
+        async function testUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const resultDiv = document.getElementById('result');
+            
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<p style="color: red;">Please select a file first</p>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            try {
+                resultDiv.innerHTML = '<p>Testing connection...</p>';
+                
+                // Test connection
+                const healthResponse = await axios.get(`${API_BASE}/health`);
+                console.log('Health check:', healthResponse.data);
+                
+                // Test upload endpoint
+                const uploadStatusResponse = await axios.get(`${API_BASE}/upload/status`);
+                console.log('Upload status:', uploadStatusResponse.data);
+                
+                resultDiv.innerHTML = '<p>Uploading file...</p>';
+                
+                // Upload file
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('userId', 'test-user-123');
+                
+                const uploadResponse = await axios.post(`${API_BASE}/upload`, formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                    timeout: 60000,
+                    onUploadProgress: (progressEvent) => {
+                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        resultDiv.innerHTML = `<p>Uploading... ${percentCompleted}%</p>`;
+                    }
+                });
+                
+                resultDiv.innerHTML = `
+                    <h3 style="color: green;">Upload Successful!</h3>
+                    <pre>${JSON.stringify(uploadResponse.data, null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                console.error('Upload failed:', error);
+                resultDiv.innerHTML = `
+                    <h3 style="color: red;">Upload Failed</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <pre>${JSON.stringify(error.response?.data || error, null, 2)}</pre>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

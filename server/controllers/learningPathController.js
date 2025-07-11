@@ -87,10 +87,118 @@ async function getLearningPaths(req, res) {
   }
 }
 
+async function getProjectLearningPaths(req, res) {
+  try {
+    const { projectId } = req.params;
+    const isMock = req.query.mock === 'true' || req.body?.mock === true;
 
+    if (!projectId) {
+      return res.status(400).json({ error: 'Project ID is required' });
+    }
 
+    if (isMock) {
+      console.log(`[Mock Mode] Returning mock learning paths for project: ${projectId}`);
+
+      return res.json({
+        success: true,
+        data: [
+          {
+            path_id: 'lp_project_001',
+            project_id: projectId,
+            recommended_topics: ['Code Quality', 'Security Best Practices', 'Performance Optimization'],
+            difficulty_level: 'Intermediate',
+            estimated_hours: 8,
+            priority: 'HIGH',
+            learning_objectives: [
+              'Improve overall code quality scores',
+              'Address security vulnerabilities',
+              'Optimize application performance'
+            ],
+            based_on_analysis: true,
+            resources: [
+              {
+                type: 'course',
+                title: 'JavaScript Security Fundamentals',
+                url: 'https://example.com/js-security',
+                priority: 'HIGH'
+              },
+              {
+                type: 'article',
+                title: 'Code Quality Metrics That Matter',
+                url: 'https://dev.to/code-quality',
+                priority: 'MEDIUM'
+              },
+              {
+                type: 'video',
+                title: 'Performance Optimization Techniques',
+                url: 'https://youtube.com/performance-tips',
+                priority: 'MEDIUM'
+              }
+            ],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        ]
+      });
+    }
+
+    // For now, return mock data since we don't have project-specific learning path service
+    // In the future, this would call learningPathService.getProjectLearningPaths(projectId)
+    console.log(`[learningPathController] Returning mock project learning paths for: ${projectId}`);
+    
+    return res.json({
+      success: true,
+      data: [
+        {
+          path_id: 'lp_project_001',
+          project_id: projectId,
+          recommended_topics: ['Code Quality', 'Security Best Practices', 'Performance Optimization'],
+          difficulty_level: 'Intermediate',
+          estimated_hours: 8,
+          priority: 'HIGH',
+          learning_objectives: [
+            'Improve overall code quality scores',
+            'Address security vulnerabilities',
+            'Optimize application performance'
+          ],
+          based_on_analysis: true,
+          resources: [
+            {
+              type: 'course',
+              title: 'JavaScript Security Fundamentals',
+              url: 'https://example.com/js-security',
+              priority: 'HIGH'
+            },
+            {
+              type: 'article',
+              title: 'Code Quality Metrics That Matter',
+              url: 'https://dev.to/code-quality',
+              priority: 'MEDIUM'
+            },
+            {
+              type: 'video',
+              title: 'Performance Optimization Techniques',
+              url: 'https://youtube.com/performance-tips',
+              priority: 'MEDIUM'
+            }
+          ],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ]
+    });
+
+  } catch (error) {
+    console.error('[learningPathController] getProjectLearningPaths error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve project learning paths',
+      details: error.stack || error.message || error.toString()
+    });
+  }
+}
 
 module.exports = {
   generateLearningPath,
-  getLearningPaths
+  getLearningPaths,
+  getProjectLearningPaths
 };

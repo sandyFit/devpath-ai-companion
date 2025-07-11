@@ -12,7 +12,6 @@ const AnalysisTab = ({
     loading
 }) => {
     const analysisData = data || analyses;
-    console.log('AnalysisTab: analysisData:', analysisData); // Debug log
     
     // All analyses have qualityScore, so we'll show them all as file analyses
     // Project-level analyses would have overallScore, but our current data structure has individual file analyses

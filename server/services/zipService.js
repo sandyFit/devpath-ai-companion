@@ -2,13 +2,24 @@ const path = require('path');
 const fs = require('fs');
 const AdmZip = require('adm-zip');
 
-const extractZipContents = (zipPath) => {
+const extractZipContents = (zipPath, projectId = null) => {
   const zip = new AdmZip(zipPath);
   const zipEntries = zip.getEntries();
-  const extractedDir = path.join(__dirname, '..', 'extracted');
+  
+  // Create project-specific extraction directory if projectId is provided
+  const baseExtractedDir = path.join(__dirname, '..', 'extracted');
+  const extractedDir = projectId 
+    ? path.join(baseExtractedDir, projectId)
+    : baseExtractedDir;
 
+  // Ensure the base extracted directory exists
+  if (!fs.existsSync(baseExtractedDir)) {
+    fs.mkdirSync(baseExtractedDir, { recursive: true });
+  }
+
+  // Ensure the project-specific directory exists
   if (!fs.existsSync(extractedDir)) {
-    fs.mkdirSync(extractedDir);
+    fs.mkdirSync(extractedDir, { recursive: true });
   }
 
   const allowedExtensions = ['.js', '.jsx', '.py', '.ts', '.tsx'];

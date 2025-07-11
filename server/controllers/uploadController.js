@@ -16,31 +16,41 @@ const uploadHandler = async (req, res) => {
     const userId = req.body.userId || req.headers['x-user-id'] || 'anonymous-user';
     const projectName = req.body.projectName || `Project-${Date.now()}`;
 
+    // Create project in Snowflake database first to get projectId
+    let projectResult;
+    try {
+      console.log('[UploadController] Creating project in database');
+      
+      projectResult = await projectRepository.createProject({
+        userId: userId,
+        projectName: projectName,
+        totalFiles: 0, // Will be updated after extraction
+        status: 'PENDING'
+      });
+
+      console.log(`[UploadController] Project created successfully: ${projectResult.data.projectId}`);
+    } catch (dbError) {
+      console.error('[UploadController] Database error during project creation:', dbError);
+      return res.status(500).json({
+        error: 'Failed to create project in database',
+        details: dbError.message
+      });
+    }
+
+    // Extract files to project-specific directory
     const zipPath = path.join(__dirname, '..', 'uploads', req.file.filename);
-    const extractResult = extractZipContents(zipPath);
+    const extractResult = extractZipContents(zipPath, projectResult.data.projectId);
     
     console.log('[UploadController] Request headers:', req.headers);
     console.log('[UploadController] File:', req.file);
-    console.log(`[UploadController] Extracted ${extractResult.extractedFilesCount} files`);
+    console.log(`[UploadController] Extracted ${extractResult.extractedFilesCount} files to project-specific directory`);
 
     if (extractResult.extractedFilesCount === 0) {
       return res.status(400).json({ error: 'No relevant code files found in ZIP' });
     }
 
-    // Create project in Snowflake database
+    // Update project file count with actual extracted files
     try {
-      console.log('[UploadController] Creating project in database');
-      
-      const projectResult = await projectRepository.createProject({
-        userId: userId,
-        projectName: projectName,
-        totalFiles: extractResult.extractedFilesCount,
-        status: 'PENDING'
-      });
-
-      console.log(`[UploadController] Project created successfully: ${projectResult.data.projectId}`);
-
-      // Update project file count with actual extracted files
       await projectRepository.updateProjectFileCount(
         projectResult.data.projectId, 
         extractResult.extractedFilesCount

@@ -3,34 +3,24 @@ import api from '../services/api';
 import useApiError from './useApiError';
 
 const MAX_RETRIES = 3;
-const CACHE_DURATION = 5 * 60 * 1000;
 
-export default function useAnalyticsSummary(projectId, setLoadingState, isGlobalCacheValid) {
+export default function useAnalyticsSummary(projectId, setLoadingState) {
   const [analyticsSummary, setAnalyticsSummary] = useState(null);
-  const [lastFetch, setLastFetch] = useState(null);
-  const [error, setError] = useState(null); // Add error state
+  const [error, setError] = useState(null);
   const handleApiError = useApiError();
-
-  const isCacheValid = useCallback(() => {
-    return lastFetch && (Date.now() - lastFetch) < CACHE_DURATION;
-  }, [lastFetch]);
 
   const fetchAnalyticsSummary = useCallback(async (force = false, retryAttempt = 0) => {
     if (!projectId) return;
 
-    if (!force && (isCacheValid() || isGlobalCacheValid?.()) && analyticsSummary) {
-      return analyticsSummary;
-    }
-
-    console.log('Fetching analytics summary for project:', projectId); // Debug log
+    console.log('Fetching analytics summary for project:', projectId);
     setLoadingState('summary', true);
     setError(null);
 
     try {
       const response = await api.getProjectAnalyticsSummary(projectId);
-      console.log('Analytics summary response:', response); // Debug log
+      console.log('Analytics summary response:', response);
 
-      const data = response.data || response || {}; // Handle different response formats
+      const data = response.data || response || {};
 
       // If no data, create a fallback structure
       if (!data || Object.keys(data).length === 0) {
@@ -39,15 +29,16 @@ export default function useAnalyticsSummary(projectId, setLoadingState, isGlobal
           totalAnalyses: 0,
           totalIssues: 0,
           avgQualityScore: 0,
+          avgComplexityScore: 0,
+          avgSecurityScore: 0,
+          languageBreakdown: [],
           topIssueTypes: []
         };
         setAnalyticsSummary(fallbackData);
-        setLastFetch(Date.now());
         return fallbackData;
       }
 
       setAnalyticsSummary(data);
-      setLastFetch(Date.now());
       return data;
     } catch (err) {
       console.error('Analytics summary fetch error:', err);
@@ -64,24 +55,24 @@ export default function useAnalyticsSummary(projectId, setLoadingState, isGlobal
         totalAnalyses: 0,
         totalIssues: 0,
         avgQualityScore: 0,
+        avgComplexityScore: 0,
+        avgSecurityScore: 0,
+        languageBreakdown: [],
         topIssueTypes: [],
         error: true
       };
       setAnalyticsSummary(fallbackData);
 
       handleApiError(err, 'analytics summary');
-      // Don't throw error, return fallback instead
       return fallbackData;
     } finally {
       setLoadingState('summary', false);
     }
-  }, [projectId, analyticsSummary, isCacheValid, isGlobalCacheValid, setLoadingState, handleApiError]);
+  }, [projectId, setLoadingState, handleApiError]);
 
   return {
     analyticsSummary,
     fetchAnalyticsSummary,
-    isCacheValid,
-    lastFetch,
     error
   };
 }

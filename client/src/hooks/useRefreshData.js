@@ -3,6 +3,7 @@
  * - Call fetchProjectData, fetchAnalyses, fetchAnalyticsSummary, and fetchLearningPaths
  * - Manage the refreshing state
  * - Handle setError and retry fallback if needed
+ * - No caching - always forces fresh data
  */
 
 import { useState, useCallback } from 'react';
@@ -15,8 +16,7 @@ export default function useRefreshData({
   fetchAnalyses,
   fetchAnalyticsSummary,
   fetchLearningPaths,
-  setError,
-  setLastFetch
+  setError
 }) {
   const [refreshing, setRefreshing] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -40,7 +40,6 @@ export default function useRefreshData({
         console.warn('Some refresh operations failed:', failed);
       }
 
-      setLastFetch(Date.now());
       setRetryCount(0);
     } catch (err) {
       console.error('Refresh failed:', err);
@@ -59,8 +58,7 @@ export default function useRefreshData({
     fetchAnalyticsSummary,
     fetchLearningPaths,
     retryCount,
-    setError,
-    setLastFetch
+    setError
   ]);
 
   return { refreshing, refreshData };

@@ -19,7 +19,7 @@ class AnalysisService {
     this.FILE_CONFIG = {
       maxFileSize: 50000,
       maxBatchSize: 500000,
-      maxBatchFiles: 20,
+      maxBatchFiles: 50, // Increased from 20 to 50 to handle larger projects
       supportedExtensions: ['.js', '.jsx', '.py'],
       priorityExtensions: ['.js', '.jsx', '.py']
     };
@@ -82,6 +82,8 @@ class AnalysisService {
       
       const result = {
         fileId: fileData.fileId,
+        filename: fileData.filename,
+        language: fileData.language,
         analysis: analysis
       };
 
@@ -89,8 +91,6 @@ class AnalysisService {
         analysisId,
         ...result,
         timestamp: new Date().toISOString(),
-        filename: fileData.filename,
-        language: fileData.language,
         isHighPriority
       };
 

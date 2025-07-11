@@ -8,4 +8,7 @@ router.post('/user/:userId/generate', learningPathController.generateLearningPat
 // GET /api/learning-paths/user/:userId
 router.get('/user/:userId', learningPathController.getLearningPaths);
 
+// GET /api/learning-paths/project/:projectId
+router.get('/project/:projectId', learningPathController.getProjectLearningPaths);
+
 module.exports = router;

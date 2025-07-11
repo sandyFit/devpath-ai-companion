@@ -2,8 +2,8 @@
  * This hook manages:
  * - Fetching code analyses
  * - Retry logic
- * - Internal cache validation
  * - Parent update (onDataUpdate)
+ * - No caching - always fetches fresh data
  */
 
 import { useState, useCallback } from 'react';
@@ -11,30 +11,19 @@ import api from '../services/api';
 import useApiError from './useApiError';
 
 const MAX_RETRIES = 3;
-const CACHE_DURATION = 5 * 60 * 1000;
 
-export default function useAnalyses(projectId, setLoadingState, onDataUpdate, isGlobalCacheValid) {
+export default function useAnalyses(projectId, setLoadingState, onDataUpdate) {
   const [analyses, setAnalyses] = useState([]);
-  const [lastFetch, setLastFetch] = useState(null);
   const handleApiError = useApiError();
-
-  const isCacheValid = useCallback(() => {
-    return lastFetch && (Date.now() - lastFetch) < CACHE_DURATION;
-  }, [lastFetch]);
 
   const fetchAnalyses = useCallback(async (force = false, retryAttempt = 0) => {
     if (!projectId) return;
-
-    if (!force && (isCacheValid() || isGlobalCacheValid?.()) && analyses.length > 0) {
-      return analyses;
-    }
 
     setLoadingState('analyses', true);
     try {
       const response = await api.getProjectAnalysis(projectId);
       const data = response.data || [];
       setAnalyses(data);
-      setLastFetch(Date.now());
 
       if (onDataUpdate) {
         onDataUpdate(data);
@@ -53,12 +42,10 @@ export default function useAnalyses(projectId, setLoadingState, onDataUpdate, is
     } finally {
       setLoadingState('analyses', false);
     }
-  }, [projectId, analyses, isCacheValid, isGlobalCacheValid, onDataUpdate, setLoadingState, handleApiError]);
+  }, [projectId, onDataUpdate, setLoadingState, handleApiError]);
 
   return {
     analyses,
-    fetchAnalyses,
-    isCacheValid,
-    lastFetch
+    fetchAnalyses
   };
 }

@@ -27,8 +27,8 @@ router.get('/analyze/stats', getAnalysisStats);
 router.get('/analyze/types', getAvailableAnalysisTypes);
 
 // Project analysis endpoints
-router.get('/api/analysis/:projectId', getProjectAnalyses);
-router.get('/api/analysis/:projectId/summary', getProjectAnalyticsSummary);
+router.get('/analysis/:projectId', getProjectAnalyses);
+router.get('/analysis/:projectId/summary', getProjectAnalyticsSummary);
 
 // DEBUG ENDPOINTS - Add debugging endpoints to help diagnose database issues
 router.get('/debug/database/health', async (req, res) => {

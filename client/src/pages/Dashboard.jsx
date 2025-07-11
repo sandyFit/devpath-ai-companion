@@ -15,9 +15,17 @@ const Dashboard = () => {
     const [analysisData, setAnalysisData] = useState(null);
     const [learningPath, setLearningPath] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [currentProjectId, setCurrentProjectId] = useState('408e786e-3d7a-4db2-9a8f-1f471e2f2164'); // TEMP: Test with user's project ID
+    const [currentProjectId, setCurrentProjectId] = useState('408e786e-3d7a-4db2-9a8f-1f471e2f2164');
+    const [currentUser] = useState({
+        name: "Alex Developer",
+        streak: 7,
+        level: "Intermediate",
+        currentFocus: "React Hooks & Performance"
+    });// TEMP: Test with user's project ID
 
     // Fixed filtering logic for project insights
+    // Fixed projectInsights filtering logic in Dashboard.jsx
+
     const projectInsights = React.useMemo(() => {
         console.log('Raw analysisData:', analysisData); // Debug log
 
@@ -32,12 +40,27 @@ const Dashboard = () => {
 
         // Handle batch analysis results structure
         if (dataToProcess.results && Array.isArray(dataToProcess.results)) {
-            const insights = dataToProcess.results.filter(item =>
+            const insights = dataToProcess.results.map(item => {
+                // Extract the nested analysis data
+                const analysis = item.analysis || item;
+                return {
+                    ...analysis,
+                    analysisId: item.analysisId || analysis.analysisId,
+                    fileId: item.fileId || analysis.fileId,
+                    filename: analysis.filename || analysis.filePath || `Analysis ${item.analysisId?.substring(0, 8)}`,
+                    // Ensure we have the required display properties
+                    qualityScore: analysis.qualityScore || analysis.overallScore,
+                    overallScore: analysis.overallScore || analysis.qualityScore,
+                    summary: analysis.summary || analysis.description,
+                    issues: analysis.issues || [],
+                    suggestions: analysis.suggestions || []
+                };
+            }).filter(item =>
                 item.qualityScore !== undefined ||
                 item.overallScore !== undefined ||
                 item.analysisId !== undefined
             );
-            console.log('Filtered batch results:', insights);
+            console.log('Processed batch results:', insights);
             return insights;
         }
 
@@ -72,6 +95,7 @@ const Dashboard = () => {
         return [];
     }, [analysisData]);
 
+    // Also update the fileInsights logic similarly
     const fileInsights = React.useMemo(() => {
         if (!analysisData) return [];
 
@@ -81,9 +105,20 @@ const Dashboard = () => {
             dataToProcess = analysisData.data;
         }
 
-        // Handle batch analysis results
+        // Handle batch analysis results - for file insights, we want individual file analyses
         if (dataToProcess.results && Array.isArray(dataToProcess.results)) {
-            return dataToProcess.results.filter(item =>
+            return dataToProcess.results.map(item => {
+                const analysis = item.analysis || item;
+                return {
+                    ...analysis,
+                    analysisId: item.analysisId || analysis.analysisId,
+                    fileId: item.fileId || analysis.fileId,
+                    filename: analysis.filename || analysis.filePath || `File ${item.analysisId?.substring(0, 8)}`,
+                    qualityScore: analysis.qualityScore || analysis.overallScore,
+                    summary: analysis.summary || analysis.description,
+                    issues: analysis.issues || []
+                };
+            }).filter(item =>
                 item.filename || item.analysisId
             );
         }
@@ -97,12 +132,7 @@ const Dashboard = () => {
         return dataToProcess?.fileAnalyses || [];
     }, [analysisData]);
 
-    const [currentUser] = useState({
-        name: "Alex Developer",
-        streak: 7,
-        level: "Intermediate",
-        currentFocus: "React Hooks & Performance"
-    });
+    
 
     const agentStatus = [
         [

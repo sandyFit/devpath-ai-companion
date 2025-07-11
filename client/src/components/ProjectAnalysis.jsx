@@ -13,74 +13,64 @@ import AnalysisTab from './ProjectAnalysisUI/AnalysisTab';
 import LearningPathsTab from './LearningPathsUI/LearningPathsTab';
 import NavigationTabs from './ProjectAnalysisUI/NavigationTabs';
 import { getStatusColor, getPriorityColor } from '../utils/functions';
-import {  AlertTriangle, PlayCircle, RefreshCw} from 'lucide-react';
+import { AlertTriangle, PlayCircle, RefreshCw } from 'lucide-react';
 
 const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
     const projectId = propProjectId;
     const [activeTab, setActiveTab] = useState('summary');
     const [expandedItems, setExpandedItems] = useState(new Set());
 
-    const [loadingState, setLoadingState] = useState({ project: false, /* ... */ });
+    const [loadingState, setLoadingState] = useState({ project: false });
     const [error, setError] = useState(null);
-    const [lastFetch, setLastFetch] = useState(null);
 
     const handleApiError = useApiError(setError);
     const {
-    projectData,
-    fetchProjectData: fetchProjectDataRaw,
-    isCacheValid
+        projectData,
+        fetchProjectData
     } = useProjectData(projectId, setLoadingState);
 
     const {
         analyses,
-        fetchAnalyses: fetchAnalysesRaw
-      } = useAnalyses(projectId, setLoadingState, onDataUpdate, isCacheValid);
+        fetchAnalyses
+    } = useAnalyses(projectId, setLoadingState, onDataUpdate);
 
     const {
-    analyticsSummary,
-    fetchAnalyticsSummary: fetchAnalyticsSummaryRaw
-    } = useAnalyticsSummary(projectId, setLoadingState, isCacheValid);
+        analyticsSummary,
+        fetchAnalyticsSummary
+    } = useAnalyticsSummary(projectId, setLoadingState);
     
     const summary = analyticsSummary; // for backward compatibility
 
     const {
-    learningPaths,
-    fetchLearningPaths: fetchLearningPathsRaw
+        learningPaths,
+        fetchLearningPaths
     } = useLearningPaths(projectId, setLoadingState);
 
-    // Memoize fetch functions to avoid infinite loops in useEffect
-    const fetchProjectData = React.useCallback(() => fetchProjectDataRaw(), [fetchProjectDataRaw]);
-    const fetchAnalyses = React.useCallback(() => fetchAnalysesRaw(), [fetchAnalysesRaw]);
-    const fetchAnalyticsSummary = React.useCallback(() => fetchAnalyticsSummaryRaw(), [fetchAnalyticsSummaryRaw]);
-    const fetchLearningPaths = React.useCallback(() => fetchLearningPathsRaw(), [fetchLearningPathsRaw]);
-
-
     const { runMockAnalysis } = useMockAnalysis({
-    projectId,
-    setLoadingState,
-    fetchAnalyses,
-    fetchAnalyticsSummary,
-    setError
+        projectId,
+        setLoadingState,
+        fetchAnalyses,
+        fetchAnalyticsSummary,
+        setError
     });
     
     const { refreshing, refreshData } = useRefreshData({
-    projectId,
-    fetchProjectData,
-    fetchAnalyses,
-    fetchAnalyticsSummary,
-    fetchLearningPaths,
-    setError,
-    setLastFetch
+        projectId,
+        fetchProjectData,
+        fetchAnalyses,
+        fetchAnalyticsSummary,
+        fetchLearningPaths,
+        setError
     });
 
     // Auto-fetch data when component mounts or projectId changes
     useEffect(() => {
         if (projectId) {
             console.log('ProjectAnalysis: Auto-fetching data for projectId:', projectId);
-            fetchAnalysesRaw(true); // Force fetch to get fresh data
-            fetchAnalyticsSummaryRaw(true);
-            fetchProjectDataRaw(true);
-            fetchLearningPathsRaw(true);
+            fetchAnalyses(true); // Force fetch to get fresh data
+            fetchAnalyticsSummary(true);
+            fetchProjectData(true);
+            fetchLearningPaths(true);
         }
     }, [projectId]); // Remove function dependencies to prevent infinite loops
 
@@ -110,7 +100,6 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
         });
     }, []);
 
-
     const loading =
         loadingState.project ||
         loadingState.analyses ||
@@ -127,7 +116,6 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
         return <ErrorDisplay error={error} onRetry={refreshData} />;
     }
 
-    
     return (
         <div className="space-y-6">
             {/* Header with refresh button */}
@@ -170,7 +158,6 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
                 loadingState={loadingState}
             />
 
-
             {/* Project Summary Tab */}
             {activeTab === 'summary' && (
                 <SummaryTab
@@ -191,7 +178,6 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
                     loading={loadingState.analyses}
                 />
             )}
-                               
 
             {/* Learning Paths Tab */}
             {activeTab === 'learning' && (
@@ -201,13 +187,6 @@ const ProjectAnalysis = ({ projectId: propProjectId, data, onDataUpdate }) => {
                     fetchLearningPaths={fetchLearningPaths}
                     getPriorityColor={getPriorityColor}
                 />
-            )}
-
-            {/* Footer with last update info */}
-            {lastFetch && (
-                <div className="text-xs text-slate-500 text-center py-2">
-                    Last updated: {new Date(lastFetch).toLocaleString()}
-                </div>
             )}
         </div>
     );

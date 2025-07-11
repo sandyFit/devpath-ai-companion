@@ -1,7 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { analysisService, ANALYSIS_TYPES } = require('../services/analysisService');
-const analysisRepository = require('../repositories/analysisRepository');
+
+// FORCE USE OF SIMPLE REPOSITORY FOR IMMEDIATE TESTING
+console.log('[AnalysisController] FORCING USE OF SIMPLE REPOSITORY FOR TESTING');
+const analysisRepository = require('../repositories/analysisRepositorySimple');
 const projectRepository = require('../repositories/projectRepository');
 const { v4: uuidv4 } = require('uuid');
 
@@ -99,12 +102,21 @@ const analyzeExtractedFiles = async (req, res) => {
     console.log('[AnalysisController] Received batch analysis request');
     
     const { analysisTypes, projectId } = req.body;
-    const extractedDir = path.join(__dirname, '..', 'extracted');
     
-    // Check if extracted directory exists
+    // Validate that projectId is provided
+    if (!projectId) {
+      return res.status(400).json({ 
+        error: 'Project ID is required for batch analysis' 
+      });
+    }
+    
+    // Use project-specific extraction directory
+    const extractedDir = path.join(__dirname, '..', 'extracted', projectId);
+    
+    // Check if project-specific extracted directory exists
     if (!fs.existsSync(extractedDir)) {
       return res.status(400).json({ 
-        error: 'No extracted files found. Please upload and extract a ZIP file first.' 
+        error: `No extracted files found for project ${projectId}. Please upload and extract a ZIP file first.` 
       });
     }
     
@@ -139,7 +151,7 @@ const analyzeExtractedFiles = async (req, res) => {
             fileId: result.fileId || uuidv4(),
             projectId: projectId || null,
             analysisType: types.length > 0 ? types[0] : 'code_quality', // Use first analysis type
-            filename: result.filename || 'unknown_file', // Fix: Ensure filename is always provided
+            filename: result.filename || 'unknown_file', // Get filename from analysis result
             language: result.language || 'unknown',
             issuesFound: result.analysis.issues || [],
             suggestions: result.analysis.suggestions || [],
@@ -149,6 +161,9 @@ const analyzeExtractedFiles = async (req, res) => {
             strengths: result.analysis.strengths || [],
             learningRecommendations: result.analysis.learningRecommendations || []
           };
+
+          console.log('[BATCH DEBUG] Analysis result structure:', JSON.stringify(result, null, 2));
+          console.log('[BATCH DEBUG] Filename from result:', result.filename);
 
           console.log('[BATCH DEBUG] Saving analysis for:', result.filename);
           console.log('[BATCH DEBUG] Analysis data payload:', JSON.stringify(analysisData, null, 2));
